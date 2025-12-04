@@ -7,5 +7,15 @@
     ],
     "deny": [],
     "ask": []
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "commands": [
+          "echo '\n📋 CLAUDE.md Location: .claude/CLAUDE.md\n💡 Remember to check project structure, sub-agents, and documentation before major changes.'"
+        ]
+      }
+    ]
   }
 }
