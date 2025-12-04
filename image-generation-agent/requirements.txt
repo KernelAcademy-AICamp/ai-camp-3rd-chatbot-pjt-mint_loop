@@ -1,0 +1,33 @@
+# 핵심 프레임워크 (최신 버전)
+langgraph==0.6.4
+langchain==0.3.27
+langchain-openai==0.3.30
+langchain-mcp-adapters==0.1.9
+fastmcp==2.11.3
+
+# A2A SDK (선택사항)
+a2a-sdk[grpc]==0.3.0
+
+# 유틸리티
+python-dotenv==1.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+structlog==25.4.0
+PyYAML>=6.0
+
+# 이미지 생성
+openai>=1.0.0
+pillow>=10.0.0
+
+# 검색
+tavily-python>=0.3.0
+
+# HTTP 클라이언트
+httpx>=0.28.1
+httpx-sse>=0.4.1
+aiohttp>=3.9.0
+
+# 개발 도구
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+ruff>=0.1.0

@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # Search MCP Server - 키워드 추출 및 검색
+  search-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.search-mcp
+    container_name: image-gen-search-mcp
+    ports:
+      - "8050:8050"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - MCP_SERVER_PORT=8050
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - image-gen-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8050/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Image Generation MCP Server - DALL-E 3 이미지 생성
+  image-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.image-mcp
+    container_name: image-gen-image-mcp
+    ports:
+      - "8051:8051"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_IMAGE_MODEL=${OPENAI_IMAGE_MODEL:-dall-e-3}
+      - IMAGE_DEFAULT_SIZE=${IMAGE_DEFAULT_SIZE:-1024x1024}
+      - IMAGE_DEFAULT_QUALITY=${IMAGE_DEFAULT_QUALITY:-standard}
+      - IMAGE_DEFAULT_STYLE=${IMAGE_DEFAULT_STYLE:-vivid}
+      - MCP_SERVER_PORT=8051
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - image-gen-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8051/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Image Generation Agent - LangGraph Agent
+  image-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: image-gen-agent
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SEARCH_MCP_URL=http://search-mcp:8050/mcp
+      - IMAGE_MCP_URL=http://image-mcp:8051/mcp
+      - A2A_AGENT_NAME=${A2A_AGENT_NAME:-ImageGenerationAgent}
+      - A2A_AGENT_PORT=8080
+      - A2A_AGENT_HOST=0.0.0.0
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      search-mcp:
+        condition: service_healthy
+      image-mcp:
+        condition: service_healthy
+    networks:
+      - image-gen-network
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: python examples/a2a_integration.py
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  image-gen-network:
+    driver: bridge
+    name: image-generation-network
+
+volumes:
+  agent-data:
+    driver: local
+  agent-logs:
+    driver: local
