@@ -24,6 +24,138 @@ graph TB
 3. **이미지 생성**: 추출된 키워드를 활용하여 고품질 이미지 생성
 4. **결과 반환**: 생성된 이미지와 메타데이터를 사용자에게 전달
 
+---
+
+## 빠른 시작 가이드
+
+### 1. 환경 설정
+
+```bash
+# 프로젝트 디렉토리로 이동
+cd image-generation-agent
+
+# 가상환경 활성화
+source .venv/bin/activate
+
+# 환경변수 로드 (mintloop root의 .env 사용)
+export OPENAI_API_KEY="$(grep OPENAI_API_KEY ../.env | cut -d'=' -f2 | tr -d '\"')"
+export TAVILY_API_KEY="$(grep TAVILY_API_KEY ../.env | cut -d'=' -f2 | tr -d '\"')"
+
+# 또는 직접 설정
+# export OPENAI_API_KEY="your_openai_api_key"
+# export TAVILY_API_KEY="your_tavily_api_key"
+```
+
+### 2. 테스트 실행
+
+```bash
+# 전체 테스트
+pytest tests/ -v
+
+# 특정 테스트만 실행
+pytest tests/test_agent.py -v
+pytest tests/test_mcp_servers.py -v
+```
+
+### 3. MCP 서버 실행
+
+터미널 2개를 열어서 각각 실행:
+
+**터미널 1 - Search MCP Server (포트 8050)**
+```bash
+cd image-generation-agent
+source .venv/bin/activate
+export OPENAI_API_KEY="$(grep OPENAI_API_KEY ../.env | cut -d'=' -f2 | tr -d '\"')"
+export TAVILY_API_KEY="$(grep TAVILY_API_KEY ../.env | cut -d'=' -f2 | tr -d '\"')"
+
+python -m src.mcp_servers.search_server
+```
+
+**터미널 2 - Image MCP Server (포트 8051)**
+```bash
+cd image-generation-agent
+source .venv/bin/activate
+export OPENAI_API_KEY="$(grep OPENAI_API_KEY ../.env | cut -d'=' -f2 | tr -d '\"')"
+
+python -m src.mcp_servers.image_server
+```
+
+### 4. 예제 실행
+
+```bash
+# basic_usage 예제 실행
+python -m examples.basic_usage
+```
+
+### 5. Python REPL에서 직접 테스트
+
+```python
+import asyncio
+from src.image_agent.agent import ImageGenerationAgent
+
+# MCP 도구 연결 (실제 MCP 서버 연결 시)
+# 간단한 Mock으로 테스트하려면:
+from unittest.mock import Mock, AsyncMock
+
+extract_tool = Mock()
+extract_tool.name = 'extract_keywords'
+extract_tool.ainvoke = AsyncMock(return_value={
+    'keywords': ['romantic', 'paris', 'sunset'],
+    'confidence': 0.9
+})
+
+optimize_tool = Mock()
+optimize_tool.name = 'optimize_prompt_for_image'
+optimize_tool.ainvoke = AsyncMock(return_value={
+    'optimized_prompt': 'romantic paris sunset, film aesthetic, high quality'
+})
+
+generate_tool = Mock()
+generate_tool.name = 'generate_image'
+generate_tool.ainvoke = AsyncMock(return_value={
+    'url': 'https://example.com/paris_sunset.png',
+    'metadata': {'model': 'dall-e-3', 'size': '1024x1024'}
+})
+
+async def main():
+    agent = ImageGenerationAgent(
+        search_tools=[extract_tool],
+        image_tools=[optimize_tool, generate_tool]
+    )
+
+    result = await agent.generate("romantic trip to Paris at sunset")
+    print(f"Status: {result['status']}")
+    print(f"Keywords: {result['extracted_keywords']}")
+    print(f"Optimized Prompt: {result['optimized_prompt']}")
+    print(f"Image URL: {result['generated_image_url']}")
+
+asyncio.run(main())
+```
+
+### 6. Docker로 실행 (선택사항)
+
+```bash
+cd image-generation-agent
+
+# 모든 서비스 시작
+docker-compose up -d
+
+# 로그 확인
+docker-compose logs -f
+
+# 서비스 중지
+docker-compose down
+```
+
+### 주요 엔드포인트
+
+| 서버 | URL | 기능 |
+|------|-----|------|
+| Search MCP | http://localhost:8050 | 키워드 추출, 시각적 참조 검색 |
+| Image MCP | http://localhost:8051 | 프롬프트 최적화, DALL-E 3 이미지 생성 |
+
+---
+
 ## 기술 스택
 
 ### 핵심 프레임워크 (최신 버전)

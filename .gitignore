@@ -38,3 +38,52 @@ next-env.d.ts
 .vscode
 *.swp
 *.swo
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+**/*.so
+**/.Python
+**/develop-eggs/
+**/dist/
+**/downloads/
+**/eggs/
+**/.eggs/
+**/lib/
+**/lib64/
+**/parts/
+**/sdist/
+**/var/
+**/wheels/
+**/*.egg-info/
+**/.installed.cfg
+**/*.egg
+
+# Python Virtual Environment
+**/.venv/
+**/venv/
+**/ENV/
+**/env/
+
+# Python Testing
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/.tox/
+**/.nox/
+**/.hypothesis/
+
+# Python Type Checking
+**/.mypy_cache/
+**/.dmypy.json
+**/dmypy.json
+
+# Jupyter Notebook
+**/.ipynb_checkpoints
+
+# Python Distribution
+**/MANIFEST
+
+# Python Logging (specific to avoid conflicts)
+**/*.pylog

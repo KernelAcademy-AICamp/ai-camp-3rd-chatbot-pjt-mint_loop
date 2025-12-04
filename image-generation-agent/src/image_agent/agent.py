@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from .state import ImageGenerationState, ImageGenerationInput, ImageGenerationOutput
+from .state import ImageGenerationState
 from .nodes import extract_keywords_node, optimize_prompt_node, generate_image_node
 
 logger = structlog.get_logger(__name__)
@@ -45,26 +45,23 @@ class ImageGenerationAgent:
     def _build_graph(self):
         """LangGraph 워크플로우 구축"""
 
-        # StateGraph 생성
-        workflow = StateGraph(
-            state_schema=ImageGenerationState,
-            input=ImageGenerationInput,
-            output=ImageGenerationOutput
-        )
+        # StateGraph 생성 (전체 상태 스키마 사용)
+        workflow = StateGraph(ImageGenerationState)
+
+        # async 노드 래퍼 함수 생성
+        async def _extract_keywords(state):
+            return await extract_keywords_node(state, self.search_tools)
+
+        async def _optimize_prompt(state):
+            return await optimize_prompt_node(state, self.image_tools)
+
+        async def _generate_image(state):
+            return await generate_image_node(state, self.image_tools)
 
         # 노드 추가
-        workflow.add_node(
-            "extract_keywords",
-            lambda state: extract_keywords_node(state, self.search_tools)
-        )
-        workflow.add_node(
-            "optimize_prompt",
-            lambda state: optimize_prompt_node(state, self.image_tools)
-        )
-        workflow.add_node(
-            "generate_image",
-            lambda state: generate_image_node(state, self.image_tools)
-        )
+        workflow.add_node("extract_keywords", _extract_keywords)
+        workflow.add_node("optimize_prompt", _optimize_prompt)
+        workflow.add_node("generate_image", _generate_image)
 
         # 엣지 정의
         workflow.set_entry_point("extract_keywords")
