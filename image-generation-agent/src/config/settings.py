@@ -12,9 +12,24 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
     tavily_api_key: str = Field(..., env="TAVILY_API_KEY")
 
-    # Image Generation Settings
+    # Provider Selection
+    image_provider: Literal["openai", "gemini"] = Field(
+        default="openai",
+        env="IMAGE_PROVIDER",
+        description="이미지 생성 프로바이더 (openai 또는 gemini)"
+    )
+
+    # Image Generation Settings - OpenAI
     openai_image_model: str = Field(default="dall-e-3", env="OPENAI_IMAGE_MODEL")
-    image_default_size: Literal["1024x1024", "1792x1024", "1024x1792"] = Field(
+
+    # Image Generation Settings - Gemini
+    gemini_image_model: str = Field(
+        default="imagen-3.0-generate-002",
+        env="GEMINI_IMAGE_MODEL"
+    )
+
+    # Common Image Settings
+    image_default_size: str = Field(
         default="1024x1024",
         env="IMAGE_DEFAULT_SIZE"
     )

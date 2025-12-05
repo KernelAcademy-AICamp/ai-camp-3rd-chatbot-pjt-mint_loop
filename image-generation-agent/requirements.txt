@@ -14,9 +14,11 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 structlog==25.4.0
 PyYAML>=6.0
+pytz>=2024.1
 
 # 이미지 생성
 openai>=1.0.0
+google-genai>=1.0.0
 pillow>=10.0.0
 
 # 검색
@@ -26,6 +28,10 @@ tavily-python>=0.3.0
 httpx>=0.28.1
 httpx-sse>=0.4.1
 aiohttp>=3.9.0
+
+# API 서버
+fastapi>=0.115.0
+uvicorn>=0.32.0
 
 # 개발 도구
 pytest>=7.0.0

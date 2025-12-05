@@ -15,9 +15,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY src/mcp_servers/search_server.py /app/search_server.py
-COPY src/config /app/src/config
+# Copy application code - entire src directory for consistency
+COPY src /app/src
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -28,9 +27,9 @@ ENV MCP_SERVER_PORT=8050
 # Expose MCP server port
 EXPOSE 8050
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8050/health || exit 1
+# Health check - use /mcp endpoint instead of /health
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8050/mcp || exit 1
 
-# Run MCP server
-CMD ["python", "search_server.py"]
+# Run MCP server as module
+CMD ["python", "-m", "src.mcp_servers.search_server"]

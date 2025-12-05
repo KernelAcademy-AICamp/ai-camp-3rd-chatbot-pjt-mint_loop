@@ -187,14 +187,18 @@ async def main():
     # 1. MCP 서버에서 도구 로드
     from langchain_mcp_adapters.client import MultiServerMCPClient
 
+    # 환경변수에서 MCP 서버 URL 가져오기 (Docker 환경 지원)
+    search_mcp_url = os.getenv("SEARCH_MCP_URL", "http://localhost:8050/mcp")
+    image_mcp_url = os.getenv("IMAGE_MCP_URL", "http://localhost:8051/mcp")
+
     mcp_servers = {
         "search": {
             "transport": "streamable_http",
-            "url": "http://localhost:8050/mcp"
+            "url": search_mcp_url
         },
         "image": {
             "transport": "streamable_http",
-            "url": "http://localhost:8051/mcp"
+            "url": image_mcp_url
         }
     }
 

@@ -1,6 +1,10 @@
-"""FastAPI 서버 - 프론트엔드와 LangGraph Agent 연결"""
-import asyncio
-from contextlib import asynccontextmanager
+"""FastAPI 서버 - 프론트엔드와 Image Provider 연결
+
+직접 Image Provider를 사용하여 이미지를 생성합니다.
+MCP 서버 없이도 독립적으로 동작합니다.
+"""
+import os
+from pathlib import Path
 from typing import Optional
 
 import structlog
@@ -9,17 +13,23 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from langchain_mcp_adapters.client import MultiServerMCPClient
+# .env 파일 로드 (상위 디렉토리에서 검색)
+def find_and_load_dotenv():
+    current = Path(__file__).resolve().parent
+    for _ in range(5):
+        env_file = current / ".env"
+        if env_file.exists():
+            load_dotenv(env_file)
+            return True
+        current = current.parent
+    load_dotenv()
+    return False
 
-from .image_agent.agent import ImageGenerationAgent
+find_and_load_dotenv()
 
-load_dotenv()
+from .providers import get_provider, ImageGenerationParams
 
 logger = structlog.get_logger(__name__)
-
-# 전역 변수
-agent: Optional[ImageGenerationAgent] = None
-mcp_client: Optional[MultiServerMCPClient] = None
 
 # 컨셉별 필름 스타일 프롬프트 매핑
 CONCEPT_STYLE_PROMPTS = {
@@ -97,55 +107,10 @@ def build_travel_prompt(request: GenerateRequest) -> str:
     return ", ".join(filter(None, prompt_parts))
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """앱 시작/종료 시 MCP 클라이언트 및 Agent 초기화"""
-    global agent, mcp_client
-
-    logger.info("Initializing MCP client and Agent...")
-
-    # MCP 클라이언트 설정 (새로운 API 방식)
-    mcp_client = MultiServerMCPClient({
-        "search": {
-            "url": "http://localhost:8050/mcp",
-            "transport": "streamable_http"
-        },
-        "image": {
-            "url": "http://localhost:8051/mcp",
-            "transport": "streamable_http"
-        }
-    })
-
-    try:
-        # 도구 가져오기 (새로운 방식: await client.get_tools())
-        tools = await mcp_client.get_tools()
-        search_tools = [t for t in tools if t.name in ["extract_keywords", "search_images"]]
-        image_tools = [t for t in tools if t.name in ["optimize_prompt_for_image", "generate_image"]]
-
-        logger.info(f"Loaded {len(search_tools)} search tools, {len(image_tools)} image tools")
-
-        # Agent 초기화
-        agent = ImageGenerationAgent(
-            search_tools=search_tools,
-            image_tools=image_tools
-        )
-
-        logger.info("API server ready!")
-
-        yield
-
-    except Exception as e:
-        logger.error(f"Failed to initialize: {e}")
-        raise
-    finally:
-        logger.info("Shutting down...")
-
-
 app = FastAPI(
     title="Trip Kit Image Generation API",
-    description="LangGraph Agent를 사용한 여행 이미지 생성 API",
-    version="1.0.0",
-    lifespan=lifespan
+    description="Image Provider를 사용한 여행 이미지 생성 API",
+    version="1.0.0"
 )
 
 # CORS 설정
@@ -158,20 +123,25 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+async def root():
+    """루트 엔드포인트"""
+    return {"status": "ok", "service": "Trip Kit Image Generation API"}
+
+
 @app.get("/health")
 async def health_check():
     """헬스 체크"""
-    return {"status": "healthy", "agent_ready": agent is not None}
+    provider = os.getenv("IMAGE_PROVIDER", "openai")
+    return {"status": "healthy", "provider": provider}
 
 
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_image(request: GenerateRequest):
-    """이미지 생성 엔드포인트"""
-    global agent
+    """이미지 생성 엔드포인트
 
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
-
+    프론트엔드에서 보낸 요청을 받아 직접 Provider를 사용하여 이미지를 생성합니다.
+    """
     try:
         logger.info(f"Generate request: {request.destination}, concept={request.concept}")
 
@@ -179,29 +149,52 @@ async def generate_image(request: GenerateRequest):
         travel_prompt = build_travel_prompt(request)
         logger.info(f"Built travel prompt: {travel_prompt[:200]}...")
 
-        # Agent 실행
-        result = await agent.generate(
-            user_prompt=travel_prompt,
-            thread_id=f"{request.destination}-{request.concept}"
+        # 키워드 추출 (간단히 분리)
+        keywords = [
+            request.destination,
+            request.concept,
+            request.filmStock,
+        ]
+        if request.outfitStyle:
+            keywords.append(request.outfitStyle)
+        keywords = [k for k in keywords if k]  # 빈 값 제거
+
+        # Provider 가져오기
+        provider = get_provider()
+        logger.info(f"Using provider: {provider.provider_name}")
+
+        # 이미지 생성 파라미터
+        params = ImageGenerationParams(
+            prompt=travel_prompt,
+            size="1024x1024",
+            quality="standard",
+            style="vivid" if request.concept in ["flaneur", "midnight"] else "natural"
         )
 
-        if result["status"] == "completed":
+        # 이미지 생성
+        result = await provider.generate(params)
+
+        if result.success:
+            logger.info(f"Image generated successfully: {result.url[:50] if result.url else 'N/A'}...")
+
             return GenerateResponse(
                 status="success",
-                imageUrl=result["generated_image_url"],
-                optimizedPrompt=result["optimized_prompt"],
-                extractedKeywords=result.get("extracted_keywords", []),
+                imageUrl=result.url,
+                optimizedPrompt=travel_prompt,
+                extractedKeywords=keywords,
                 metadata={
                     "concept": request.concept,
                     "filmStock": request.filmStock,
                     "destination": request.destination,
-                    **(result.get("image_metadata") or {})
+                    "provider": result.provider,
+                    "revised_prompt": result.revised_prompt,
                 }
             )
         else:
+            logger.error(f"Image generation failed: {result.error}")
             return GenerateResponse(
                 status="error",
-                error=result.get("error", "Unknown error")
+                error=result.error or "Unknown error"
             )
 
     except Exception as e:

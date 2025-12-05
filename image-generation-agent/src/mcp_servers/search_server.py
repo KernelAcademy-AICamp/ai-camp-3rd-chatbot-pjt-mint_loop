@@ -1,9 +1,25 @@
 """Search MCP Server - 키워드 추출 및 컨텍스트 검색"""
 import os
 from typing import Any
+from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv()
+
+# .env 파일을 현재 디렉토리 및 상위 디렉토리에서 검색
+def find_and_load_dotenv():
+    """Find and load .env file from current or parent directories"""
+    current = Path(__file__).resolve().parent
+    for _ in range(5):  # Check up to 5 parent directories
+        env_file = current / ".env"
+        if env_file.exists():
+            load_dotenv(env_file)
+            return True
+        current = current.parent
+    # Fallback to default behavior
+    load_dotenv()
+    return False
+
+find_and_load_dotenv()
 
 import structlog
 from fastmcp import FastMCP
@@ -130,5 +146,5 @@ async def search_visual_references(keywords: list[str], max_results: int = 3) ->
 
 
 if __name__ == "__main__":
-    # MCP 서버 실행
-    mcp.run(transport="streamable-http", port=8050)
+    # MCP 서버 실행 (0.0.0.0으로 바인딩하여 Docker 네트워크에서 접근 가능)
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=8050)
