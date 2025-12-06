@@ -15,3 +15,5 @@ export type { ProgressProps } from './Progress';
 
 export { Skeleton } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';
+
+export { Modal } from './Modal';

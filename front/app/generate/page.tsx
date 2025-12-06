@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useVibeStore } from '@/lib/store/useVibeStore';
 import { getConceptById } from '@/lib/constants/concepts';
 import { ImageGenerationForm } from '@/components/generate/ImageGenerationForm';
-import { GeneratedImageCard } from '@/components/generate/GeneratedImageCard';
+import { ImageGenerationModal } from '@/components/generate/ImageGenerationModal';
 import { Badge } from '@/components/ui/Badge';
-import { Skeleton } from '@/components/ui/Skeleton';
 
 interface GenerationResult {
   imageUrl: string;
@@ -18,14 +18,17 @@ interface GenerationResult {
   filmStock: string;
 }
 
+type ModalStatus = 'loading' | 'success' | 'error';
+
 export default function GeneratePage() {
   const router = useRouter();
   const { selectedConcept, preferences, addGeneratedImage } = useVibeStore();
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalStatus, setModalStatus] = useState<ModalStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
-  const [lastFormData, setLastFormData] = useState<{
+  const [currentFormData, setCurrentFormData] = useState<{
     destination: string;
     additionalPrompt: string;
     selectedFilm: string;
@@ -47,9 +50,12 @@ export default function GeneratePage() {
   }) => {
     if (!concept) return;
 
-    setIsLoading(true);
+    // 모달 열고 로딩 상태로 시작
+    setCurrentFormData(formData);
+    setIsModalOpen(true);
+    setModalStatus('loading');
     setError(null);
-    setLastFormData(formData);
+    setResult(null);
 
     try {
       const response = await fetch('/api/generate', {
@@ -73,12 +79,15 @@ export default function GeneratePage() {
         throw new Error(data.message || 'Image generation failed');
       }
 
-      setResult({
+      const generationResult = {
         imageUrl: data.imageUrl,
         optimizedPrompt: data.optimizedPrompt,
         destination: formData.destination,
         filmStock: formData.selectedFilm,
-      });
+      };
+
+      setResult(generationResult);
+      setModalStatus('success');
 
       // Store에 생성된 이미지 저장
       addGeneratedImage(formData.destination, data.imageUrl);
@@ -89,19 +98,23 @@ export default function GeneratePage() {
           ? err.message
           : 'An error occurred while generating the image'
       );
-    } finally {
-      setIsLoading(false);
+      setModalStatus('error');
     }
   };
 
   const handleRegenerate = () => {
-    if (lastFormData) {
-      handleGenerate(lastFormData);
+    if (currentFormData) {
+      handleGenerate(currentFormData);
     }
   };
 
   const handleContinue = () => {
+    setIsModalOpen(false);
     router.push('/destinations');
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
   };
 
   if (!concept) {
@@ -174,90 +187,46 @@ export default function GeneratePage() {
           )}
         </motion.div>
 
-        {/* 결과가 없을 때: 입력 폼 표시 */}
-        {!result && (
-          <ImageGenerationForm
-            concept={concept}
-            onGenerate={handleGenerate}
-            isLoading={isLoading}
-            initialDestination={preferences.travelDestination || ''}
-            initialAdditionalPrompt={preferences.travelScene || ''}
-          />
-        )}
+        {/* 입력 폼 - 항상 표시 */}
+        <ImageGenerationForm
+          concept={concept}
+          onGenerate={handleGenerate}
+          isLoading={isModalOpen && modalStatus === 'loading'}
+          initialDestination={preferences.travelDestination || ''}
+          initialAdditionalPrompt={preferences.travelScene || ''}
+        />
 
-        {/* 로딩 상태 */}
-        {isLoading && !result && (
+        {/* 이전 생성 결과 미리보기 (모달 닫힌 후) */}
+        {result && !isModalOpen && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mt-6 bg-white rounded-2xl border border-cream-200 p-6"
-          >
-            <div className="flex items-center gap-4 mb-4">
-              <div className="relative w-12 h-12">
-                <svg className="animate-spin" viewBox="0 0 24 24">
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">이미지 생성 중...</h3>
-                <p className="text-sm text-gray-500">
-                  {concept.nameKo} 감성을 담아 그리고 있어요
-                </p>
-              </div>
-            </div>
-
-            {/* 스켈레톤 */}
-            <Skeleton className="w-full aspect-square rounded-xl mb-4" />
-            <Skeleton className="h-4 w-3/4 mb-2" />
-            <Skeleton className="h-4 w-1/2" />
-          </motion.div>
-        )}
-
-        {/* 에러 상태 */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-6 bg-red-50 border border-red-200 rounded-xl p-4"
+            className="mt-8 p-4 bg-white rounded-2xl border border-cream-200 shadow-sm"
           >
-            <h3 className="text-red-800 font-medium mb-1">
-              이미지 생성에 실패했어요
-            </h3>
-            <p className="text-red-600 text-sm mb-3">{error}</p>
-            <button
-              onClick={() => lastFormData && handleGenerate(lastFormData)}
-              className="text-red-700 text-sm underline hover:no-underline"
-            >
-              다시 시도하기
-            </button>
+            <div className="flex items-center gap-4">
+              <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+                <Image
+                  src={result.imageUrl}
+                  alt="Generated"
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-600 mb-1">
+                  마지막 생성: <strong>{result.destination}</strong>
+                </p>
+                <p className="text-xs text-gray-400">{result.filmStock}</p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="text-sepia-600 text-sm hover:underline"
+              >
+                다시 보기
+              </button>
+            </div>
           </motion.div>
-        )}
-
-        {/* 결과 표시 */}
-        {result && (
-          <GeneratedImageCard
-            imageUrl={result.imageUrl}
-            concept={concept}
-            destination={result.destination}
-            filmStock={result.filmStock}
-            optimizedPrompt={result.optimizedPrompt}
-            onRegenerate={handleRegenerate}
-            onContinue={handleContinue}
-            isLoading={isLoading}
-          />
         )}
 
         {/* 네비게이션 */}
@@ -275,6 +244,23 @@ export default function GeneratePage() {
           </Link>
         </motion.div>
       </main>
+
+      {/* Image Generation Modal */}
+      {currentFormData && (
+        <ImageGenerationModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          status={modalStatus}
+          concept={concept}
+          destination={currentFormData.destination}
+          filmStock={currentFormData.selectedFilm}
+          imageUrl={result?.imageUrl}
+          optimizedPrompt={result?.optimizedPrompt}
+          errorMessage={error || undefined}
+          onRegenerate={handleRegenerate}
+          onContinue={handleContinue}
+        />
+      )}
     </div>
   );
 }
