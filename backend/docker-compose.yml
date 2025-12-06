@@ -89,7 +89,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-    command: python -m src.api_server
+    command: python -m src.api_server.server
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
       interval: 10s

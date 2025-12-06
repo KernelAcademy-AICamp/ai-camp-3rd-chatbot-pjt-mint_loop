@@ -28,7 +28,8 @@ def find_and_load_dotenv():
 
 find_and_load_dotenv()
 
-from .providers import get_provider, ImageGenerationParams
+# 상위 패키지에서 providers import
+from ..providers import get_provider, ImageGenerationParams
 from .recommendations import (
     RecommendationRequest,
     RecommendationResponse,
