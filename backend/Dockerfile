@@ -1,4 +1,9 @@
-# Base Python image
+# Trip Kit Backend - API Server & LangGraph Agents
+#
+# Agents:
+#   - RecommendationAgent: 여행지 추천 (Gemini 2.5 Pro)
+#   - ImageGenerationAgent: 이미지 생성 (Gemini Imagen 3.0)
+
 FROM python:3.12-slim
 
 # Set working directory
@@ -19,15 +24,22 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create directories for logs and data
-RUN mkdir -p /app/logs /app/data
+# Create directories for logs, data, and credentials
+RUN mkdir -p /app/logs /app/data /app/credentials
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Expose port for A2A server (if running in A2A mode)
-EXPOSE 8080
+# Note: Application environment variables are set via docker-compose.yml
+# from root .env file (GEMINI_TEXT_MODEL, GEMINI_IMAGE_MODEL, VERTEX_PROJECT_ID, etc.)
 
-# Default command (can be overridden in docker-compose)
-CMD ["python", "-m", "src.image_agent.agent"]
+# Expose port for API server
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command: Run API server
+CMD ["python", "-m", "src.api_server.server"]

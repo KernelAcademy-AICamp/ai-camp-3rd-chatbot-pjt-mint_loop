@@ -4,17 +4,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.search-mcp
-    container_name: image-gen-search-mcp
+    container_name: search-mcp
     ports:
       - "8050:8050"
+    env_file:
+      - ../.env
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      # env_file에서 GEMINI_API_KEY, TAVILY_API_KEY 로드됨
       - MCP_SERVER_PORT=8050
       - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    env_file:
-      - ../.env
     restart: unless-stopped
     networks:
       - image-gen-network
@@ -30,28 +29,26 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Image Generation MCP Server - DALL-E 3 이미지 생성
+  # Image Generation MCP Server - Gemini Imagen 이미지 생성
   image-mcp:
     build:
       context: .
       dockerfile: Dockerfile.image-mcp
-    container_name: image-gen-image-mcp
+    container_name: image-mcp
     ports:
       - "8051:8051"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - IMAGE_PROVIDER=${IMAGE_PROVIDER:-openai}
-      - OPENAI_IMAGE_MODEL=${OPENAI_IMAGE_MODEL:-dall-e-3}
-      - GEMINI_IMAGE_MODEL=${GEMINI_IMAGE_MODEL:-imagen-4.0-generate-001}
-      - IMAGE_DEFAULT_SIZE=${IMAGE_DEFAULT_SIZE:-1024x1024}
-      - IMAGE_DEFAULT_QUALITY=${IMAGE_DEFAULT_QUALITY:-standard}
-      - IMAGE_DEFAULT_STYLE=${IMAGE_DEFAULT_STYLE:-vivid}
-      - MCP_SERVER_PORT=8051
-      - DEBUG=${DEBUG:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     env_file:
       - ../.env
+    environment:
+      # 모든 환경변수는 루트 .env 파일에서 로드됨
+      - IMAGE_PROVIDER=${IMAGE_PROVIDER}
+      - GEMINI_IMAGE_MODEL=${GEMINI_IMAGE_MODEL}
+      - IMAGE_DEFAULT_SIZE=${IMAGE_DEFAULT_SIZE}
+      - IMAGE_DEFAULT_QUALITY=${IMAGE_DEFAULT_QUALITY}
+      - IMAGE_DEFAULT_STYLE=${IMAGE_DEFAULT_STYLE}
+      - MCP_SERVER_PORT=8051
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL}
     restart: unless-stopped
     networks:
       - image-gen-network
@@ -67,28 +64,34 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Image Generation REST API Server
-  image-agent:
+  # Trip Kit API Server - LangGraph Agents
+  api-server:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: image-gen-agent
+    container_name: tripkit-api-server
     ports:
       - "8000:8000"
-    environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - IMAGE_PROVIDER=${IMAGE_PROVIDER:-openai}
-      - DEBUG=${DEBUG:-false}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     env_file:
       - ../.env
+    environment:
+      # 모든 환경변수는 루트 .env 파일에서 로드됨
+      - GEMINI_TEXT_MODEL=${GEMINI_TEXT_MODEL}
+      - GEMINI_IMAGE_MODEL=${GEMINI_IMAGE_MODEL}
+      - IMAGE_PROVIDER=${IMAGE_PROVIDER}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL}
+      # Vertex AI 설정 (credentials 파일은 volumes로 마운트)
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/vertex-app-key.json
+      - VERTEX_PROJECT_ID=${VERTEX_PROJECT_ID}
+      - VERTEX_LOCATION=${VERTEX_LOCATION}
     restart: unless-stopped
     networks:
       - image-gen-network
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ${VERTEX_CREDENTIALS_FILE}:/app/credentials/vertex-app-key.json:ro
     command: python -m src.api_server.server
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]

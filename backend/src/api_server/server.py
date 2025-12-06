@@ -1,17 +1,16 @@
 """FastAPI 서버 - 프론트엔드와 Image Provider 연결
 
 직접 Image Provider를 사용하여 이미지를 생성합니다.
-MCP 서버 없이도 독립적으로 동작합니다.
+RecommendationAgent를 사용하여 여행지를 추천합니다.
 """
 import os
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Optional
 
 import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 # .env 파일 로드 (상위 디렉토리에서 검색)
@@ -30,13 +29,17 @@ find_and_load_dotenv()
 
 # 상위 패키지에서 providers import
 from ..providers import get_provider, ImageGenerationParams
-from .recommendations import (
-    RecommendationRequest,
-    RecommendationResponse,
-    generate_recommendations,
-)
+# RecommendationAgent import
+from ..agents import RecommendationAgent
 
 logger = structlog.get_logger(__name__)
+
+# 모델 설정 (환경변수에서 가져오기)
+DEFAULT_TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
+DEFAULT_IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "imagen-3.0-generate-001")
+
+# RecommendationAgent 인스턴스 (싱글톤)
+recommendation_agent = RecommendationAgent(model=DEFAULT_TEXT_MODEL)
 
 # 컨셉별 필름 스타일 프롬프트 매핑
 CONCEPT_STYLE_PROMPTS = {
@@ -74,6 +77,61 @@ class GenerateResponse(BaseModel):
     extractedKeywords: list[str] = []
     metadata: Optional[dict] = None
     error: Optional[str] = None
+
+
+class UserPreferences(BaseModel):
+    """사용자 선호도"""
+    mood: Optional[str] = None
+    aesthetic: Optional[str] = None
+    duration: Optional[str] = None
+    interests: list[str] = []
+
+
+class RecommendationRequest(BaseModel):
+    """여행지 추천 요청"""
+    preferences: UserPreferences
+    concept: Optional[str] = None
+    travelScene: Optional[str] = None
+    travelDestination: Optional[str] = None
+
+
+class Activity(BaseModel):
+    """액티비티 정보"""
+    name: str
+    description: str
+    duration: str
+    bestTime: str
+    localTip: str
+    photoOpportunity: str
+
+
+class Destination(BaseModel):
+    """여행지 정보"""
+    id: str
+    name: str
+    city: str
+    country: str
+    description: str
+    matchReason: str
+    localVibe: Optional[str] = None
+    whyHidden: Optional[str] = None
+    bestTimeToVisit: str
+    photographyScore: int
+    transportAccessibility: str
+    safetyRating: int
+    estimatedBudget: Optional[str] = None
+    tags: list[str] = []
+    photographyTips: list[str] = []
+    storyPrompt: Optional[str] = None
+    activities: list[Activity] = []
+
+
+class RecommendationResponse(BaseModel):
+    """여행지 추천 응답"""
+    status: str
+    destinations: list[Destination]
+    userProfile: Optional[dict] = None
+    isFallback: bool = False
 
 
 def build_travel_prompt(request: GenerateRequest) -> str:
@@ -139,8 +197,15 @@ async def root():
 @app.get("/health")
 async def health_check():
     """헬스 체크"""
-    provider = os.getenv("IMAGE_PROVIDER", "openai")
-    return {"status": "healthy", "provider": provider}
+    provider = os.getenv("IMAGE_PROVIDER", "gemini")
+    return {
+        "status": "healthy",
+        "provider": provider,
+        "models": {
+            "text": DEFAULT_TEXT_MODEL,
+            "image": DEFAULT_IMAGE_MODEL,
+        }
+    }
 
 
 @app.post("/generate", response_model=GenerateResponse)
@@ -166,9 +231,9 @@ async def generate_image(request: GenerateRequest):
             keywords.append(request.outfitStyle)
         keywords = [k for k in keywords if k]  # 빈 값 제거
 
-        # Provider 가져오기
-        provider = get_provider()
-        logger.info(f"Using provider: {provider.provider_name}")
+        # Provider 가져오기 (Gemini + imagen 모델)
+        provider = get_provider("gemini", model=DEFAULT_IMAGE_MODEL)
+        logger.info(f"Using provider: {provider.provider_name}, model: {DEFAULT_IMAGE_MODEL}")
 
         # 이미지 생성 파라미터
         params = ImageGenerationParams(
@@ -194,6 +259,7 @@ async def generate_image(request: GenerateRequest):
                     "filmStock": request.filmStock,
                     "destination": request.destination,
                     "provider": result.provider,
+                    "model": DEFAULT_IMAGE_MODEL,
                     "revised_prompt": result.revised_prompt,
                 }
             )
@@ -213,9 +279,42 @@ async def generate_image(request: GenerateRequest):
 async def get_destination_recommendations(request: RecommendationRequest):
     """여행지 추천 엔드포인트
 
-    사용자의 선호도와 컨셉을 기반으로 AI가 숨겨진 여행지를 추천합니다.
+    RecommendationAgent를 사용하여 사용자의 선호도와 컨셉을 기반으로
+    AI가 숨겨진 여행지를 추천합니다.
     """
-    return await generate_recommendations(request)
+    try:
+        logger.info(
+            f"Recommendations request: mood={request.preferences.mood}, concept={request.concept}"
+        )
+
+        # Agent 입력 데이터 구성
+        input_data = {
+            "preferences": {
+                "mood": request.preferences.mood,
+                "aesthetic": request.preferences.aesthetic,
+                "duration": request.preferences.duration,
+                "interests": request.preferences.interests,
+            },
+            "concept": request.concept,
+            "travel_scene": request.travelScene,
+            "travel_destination": request.travelDestination,
+        }
+
+        # Agent 실행
+        result = await recommendation_agent.recommend(input_data)
+
+        logger.info(f"Recommendations generated: {len(result['destinations'])} destinations")
+
+        return RecommendationResponse(
+            status=result["status"],
+            destinations=result["destinations"],
+            userProfile=result.get("user_profile"),
+            isFallback=result.get("is_fallback", False),
+        )
+
+    except Exception as e:
+        logger.error(f"Recommendations error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

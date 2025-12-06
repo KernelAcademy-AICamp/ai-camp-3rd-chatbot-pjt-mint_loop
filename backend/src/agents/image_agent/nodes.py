@@ -1,10 +1,18 @@
-"""이미지 생성 Agent의 워크플로우 노드 구현"""
+"""이미지 생성 Agent의 워크플로우 노드 구현
+
+Google Gemini Imagen 모델을 사용합니다.
+기본 모델: imagen-3.0-generate-002 (nano-banana)
+"""
 import json
 import structlog
 from langchain_core.messages import HumanMessage, AIMessage
 
 from .state import ImageGenerationState
-from ..providers import get_provider, ImageGenerationParams
+from ...providers import get_provider, ImageGenerationParams
+
+
+# 기본 이미지 생성 모델
+DEFAULT_IMAGE_MODEL = "imagen-3.0-generate-002"
 
 
 def parse_tool_result(result):
@@ -123,23 +131,33 @@ async def optimize_prompt_node(
 
 async def generate_image_node(
     state: ImageGenerationState,
-    provider_type: str | None = None
+    provider_type: str | None = None,
+    image_model: str | None = None
 ) -> ImageGenerationState:
     """이미지 생성 노드
     providers 모듈을 직접 사용하여 이미지를 생성합니다.
 
     Args:
         state: 현재 상태
-        provider_type: 사용할 프로바이더 (None이면 환경변수에서 결정)
+        provider_type: 사용할 프로바이더 (None이면 환경변수에서 결정, 기본: gemini)
+        image_model: 사용할 이미지 모델 (None이면 기본값 사용)
     """
     try:
-        logger.info("Generating image")
+        # 모델 결정: 인자 > state > 기본값
+        actual_model = (
+            image_model
+            or state.get("image_model")
+            or DEFAULT_IMAGE_MODEL
+        )
+
+        logger.info(f"Generating image with model: {actual_model}")
 
         optimized_prompt = state["optimized_prompt"]
 
         # Provider 가져오기 (팩토리 패턴 사용)
-        provider = get_provider(provider_type)
-        logger.info(f"Using provider: {provider.provider_name}")
+        # 모델을 kwargs로 전달하여 GeminiProvider가 해당 모델 사용
+        provider = get_provider(provider_type or "gemini", model=actual_model)
+        logger.info(f"Using provider: {provider.provider_name}, model: {actual_model}")
 
         # 이미지 생성 파라미터
         params = ImageGenerationParams(
@@ -158,6 +176,7 @@ async def generate_image_node(
         image_url = result.url
         metadata = {
             "provider": result.provider,
+            "model": actual_model,
             "revised_prompt": result.revised_prompt,
             **result.metadata
         }

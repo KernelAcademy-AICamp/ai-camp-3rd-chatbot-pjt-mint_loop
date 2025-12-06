@@ -25,6 +25,7 @@ yarn-error.log*
 # Local env files
 .env
 .env*.local
+vertex-app-key.json
 
 # Vercel
 .vercel

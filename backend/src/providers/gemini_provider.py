@@ -1,10 +1,10 @@
-"""Google Gemini Imagen Image Provider
+"""Google Vertex AI Imagen Image Provider
 
-Google의 Imagen 3 모델을 사용한 이미지 생성 프로바이더 구현
+Google Vertex AI의 Imagen 3 모델을 사용한 이미지 생성 프로바이더 구현
 
 References:
-    - https://ai.google.dev/gemini-api/docs/imagen
-    - https://developers.googleblog.com/en/imagen-3-arrives-in-the-gemini-api/
+    - https://cloud.google.com/vertex-ai/generative-ai/docs/image/generate-images
+    - https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/imagen-api
 """
 
 from __future__ import annotations
@@ -35,21 +35,21 @@ SIZE_TO_ASPECT_RATIO = {
     "3:4": "3:4",
 }
 
-
-def _get_google_credential() -> str | None:
-    """Google 인증 정보를 환경변수에서 가져옴"""
-    # 환경변수 이름을 동적으로 구성하여 보안 훅 회피
-    env_name = "GOOGLE" + "_" + "API" + "_" + "KEY"
-    return os.getenv(env_name)
+# Vertex AI 설정
+DEFAULT_VERTEX_PROJECT = os.getenv("VERTEX_PROJECT_ID", "tripkit-480413")
+DEFAULT_VERTEX_LOCATION = os.getenv("VERTEX_LOCATION", "us-central1")
 
 
 class GeminiProvider(ImageProvider):
-    """Google Gemini Imagen 이미지 생성 프로바이더
+    """Google Vertex AI Imagen 이미지 생성 프로바이더
 
-    Imagen 3 API를 사용하여 이미지를 생성합니다.
+    Vertex AI의 Imagen 3 API를 사용하여 이미지를 생성합니다.
+    GOOGLE_APPLICATION_CREDENTIALS 환경변수로 서비스 계정 인증을 사용합니다.
 
     Attributes:
         model: 사용할 모델 이름 (기본: imagen-3.0-generate-002)
+        project: Google Cloud 프로젝트 ID
+        location: Vertex AI 리전
 
     Example:
         provider = GeminiProvider()
@@ -61,32 +61,58 @@ class GeminiProvider(ImageProvider):
 
     def __init__(
         self,
-        model: str = "imagen-4.0-generate-001",
-        credential: Optional[str] = None,
+        model: str = "imagen-3.0-generate-002",
+        project: Optional[str] = None,
+        location: Optional[str] = None,
     ):
-        """Gemini 프로바이더 초기화
+        """Vertex AI Imagen 프로바이더 초기화
 
         Args:
             model: 사용할 모델 이름
-            credential: API 인증 정보 (None이면 환경변수에서 가져옴)
+            project: Google Cloud 프로젝트 ID (None이면 환경변수에서 가져옴)
+            location: Vertex AI 리전 (None이면 환경변수에서 가져옴)
         """
         self._model = model
-        self._credential = credential or _get_google_credential()
+        self._project = project or DEFAULT_VERTEX_PROJECT
+        self._location = location or DEFAULT_VERTEX_LOCATION
         self._client = None
 
+        logger.info(
+            "GeminiProvider initialized",
+            model=self._model,
+            project=self._project,
+            location=self._location,
+        )
+
     def _get_client(self):
-        """Lazy initialization of client"""
+        """Lazy initialization of Vertex AI client
+
+        GOOGLE_APPLICATION_CREDENTIALS 환경변수가 설정되어 있어야 합니다.
+        """
         if self._client is None:
             try:
                 from google import genai
-                # kwargs를 사용하여 인증 정보 전달
-                init_kwargs = {"api" + "_" + "key": self._credential}
-                self._client = genai.Client(**init_kwargs)
+
+                # Vertex AI 모드로 클라이언트 초기화
+                # GOOGLE_APPLICATION_CREDENTIALS 환경변수를 자동으로 사용
+                self._client = genai.Client(
+                    vertexai=True,
+                    project=self._project,
+                    location=self._location,
+                )
+                logger.info(
+                    "Vertex AI client initialized",
+                    project=self._project,
+                    location=self._location,
+                )
             except ImportError:
                 raise ImportError(
                     "google-genai 패키지가 필요합니다. "
                     "pip install google-genai 로 설치하세요."
                 )
+            except Exception as e:
+                logger.error("Failed to initialize Vertex AI client", error=str(e))
+                raise
         return self._client
 
     @property
@@ -151,7 +177,7 @@ class GeminiProvider(ImageProvider):
                 style=params.style,
             )
 
-            # Imagen 4 API 호출
+            # Imagen 3 API 호출
             result = client.models.generate_images(
                 model=self._model,
                 prompt=enhanced_prompt,

@@ -1,6 +1,7 @@
 """이미지 생성 LangGraph Agent
 
-리팩토링: Image MCP 의존성 제거, providers 직접 호출
+Google Gemini Imagen 모델을 사용합니다.
+기본 모델: imagen-3.0-generate-002 (nano-banana)
 Search MCP는 키워드 추출에 활용 (RAG 및 다른 에이전트에서 재사용 가능)
 """
 import structlog
@@ -9,7 +10,12 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from .state import ImageGenerationState
-from .nodes import extract_keywords_node, optimize_prompt_node, generate_image_node
+from .nodes import (
+    extract_keywords_node,
+    optimize_prompt_node,
+    generate_image_node,
+    DEFAULT_IMAGE_MODEL,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -21,29 +27,30 @@ class ImageGenerationAgent:
     1. 사용자 입력 수신
     2. 키워드 추출 (Search MCP)
     3. 프롬프트 최적화 (직접 구현)
-    4. 이미지 생성 (providers 직접 호출)
+    4. 이미지 생성 (Gemini Imagen)
 
-    리팩토링 변경사항:
-    - image_tools 의존성 제거
-    - providers 모듈 직접 사용
-    - Search MCP만 유지 (재사용성)
+    Google Gemini Imagen 모델을 사용합니다.
+    기본 모델: imagen-3.0-generate-002 (nano-banana)
     """
 
     def __init__(
         self,
         search_tools: list,
         provider_type: str | None = None,
+        image_model: str | None = None,
         checkpointer: MemorySaver | None = None
     ):
         """Agent 초기화
 
         Args:
             search_tools: Search MCP 서버의 도구 리스트 (키워드 추출용)
-            provider_type: 이미지 생성 프로바이더 타입 (None이면 환경변수에서 결정)
+            provider_type: 이미지 생성 프로바이더 타입 (기본: gemini)
+            image_model: 이미지 생성 모델 (기본: imagen-3.0-generate-002)
             checkpointer: 체크포인터 (선택사항)
         """
         self.search_tools = search_tools
-        self.provider_type = provider_type
+        self.provider_type = provider_type or "gemini"
+        self.image_model = image_model or DEFAULT_IMAGE_MODEL
         self.checkpointer = checkpointer or MemorySaver()
 
         # 그래프 빌드
@@ -51,7 +58,8 @@ class ImageGenerationAgent:
 
         logger.info(
             "ImageGenerationAgent initialized",
-            provider_type=provider_type or "env-default"
+            provider_type=self.provider_type,
+            image_model=self.image_model
         )
 
     def _build_graph(self):
@@ -65,12 +73,15 @@ class ImageGenerationAgent:
             return await extract_keywords_node(state, self.search_tools)
 
         async def _optimize_prompt(state):
-            # 리팩토링: 더 이상 image_tools를 받지 않음
             return await optimize_prompt_node(state)
 
         async def _generate_image(state):
-            # 리팩토링: providers 직접 호출
-            return await generate_image_node(state, self.provider_type)
+            # provider_type과 image_model 전달
+            return await generate_image_node(
+                state,
+                provider_type=self.provider_type,
+                image_model=self.image_model
+            )
 
         # 노드 추가
         workflow.add_node("extract_keywords", _extract_keywords)
@@ -92,13 +103,15 @@ class ImageGenerationAgent:
     async def generate(
         self,
         user_prompt: str,
-        thread_id: str = "default"
+        thread_id: str = "default",
+        image_model: str | None = None
     ) -> dict:
         """이미지 생성 실행
 
         Args:
             user_prompt: 사용자 입력 텍스트
             thread_id: 대화 스레드 ID
+            image_model: 이 요청에서 사용할 모델 (선택사항, 인스턴스 기본값 오버라이드)
 
         Returns:
             dict: 생성 결과
@@ -107,7 +120,13 @@ class ImageGenerationAgent:
                 - status: 상태
         """
         try:
-            logger.info(f"Starting image generation for prompt: {user_prompt[:100]}...")
+            # 요청별 모델 오버라이드 가능
+            actual_model = image_model or self.image_model
+
+            logger.info(
+                f"Starting image generation for prompt: {user_prompt[:100]}...",
+                image_model=actual_model
+            )
 
             # 초기 상태 구성
             initial_state = {
@@ -117,6 +136,7 @@ class ImageGenerationAgent:
                 "optimized_prompt": "",
                 "generated_image_url": None,
                 "image_metadata": None,
+                "image_model": actual_model,  # 모델 정보를 state에 포함
                 "status": "pending",
                 "error": None
             }
