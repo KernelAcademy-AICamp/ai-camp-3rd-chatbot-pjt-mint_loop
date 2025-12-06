@@ -67,39 +67,35 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Image Generation Agent - LangGraph Agent
+  # Image Generation REST API Server
   image-agent:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: image-gen-agent
     ports:
-      - "8080:8080"
+      - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - IMAGE_PROVIDER=${IMAGE_PROVIDER:-openai}
-      - SEARCH_MCP_URL=http://search-mcp:8050/mcp
-      - IMAGE_MCP_URL=http://image-mcp:8051/mcp
-      - A2A_AGENT_NAME=${A2A_AGENT_NAME:-ImageGenerationAgent}
-      - A2A_AGENT_PORT=8080
-      - A2A_AGENT_HOST=0.0.0.0
       - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     env_file:
       - ../.env
     restart: unless-stopped
-    depends_on:
-      search-mcp:
-        condition: service_healthy
-      image-mcp:
-        condition: service_healthy
     networks:
       - image-gen-network
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
-    command: python examples/a2a_integration.py
+    command: python -m src.api_server
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: "json-file"
       options:

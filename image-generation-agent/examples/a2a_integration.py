@@ -10,18 +10,21 @@ from typing import Any
 
 import pytz
 import structlog
+import uvicorn
 from dotenv import load_dotenv
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.apps import A2AStarletteApplication
 from a2a.server.events import EventQueue
-from a2a.server.tasks import InMemoryTaskStore, TaskManager, TaskUpdater
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore, TaskUpdater
 from a2a.types import (
+    AgentCapabilities,
+    AgentCard,
+    AgentSkill,
     DataPart,
-    Message,
     Part,
-    Task,
     TaskState,
-    TaskStatus,
     TextPart,
 )
 from a2a.utils import new_agent_parts_message, new_agent_text_message
@@ -227,21 +230,55 @@ async def main():
 
     print("3. A2A Executor 초기화 완료\n")
 
-    # 4. A2A 서버로 등록
-    from a2a.server import A2AServer
+    # 4. A2A 서버 설정
+    host = os.getenv("A2A_AGENT_HOST", "0.0.0.0")
+    port = int(os.getenv("A2A_AGENT_PORT", 8080))
 
-    server = A2AServer(
-        agent_name=os.getenv("A2A_AGENT_NAME", "ImageGenerationAgent"),
-        executor=executor,
-        host=os.getenv("A2A_AGENT_HOST", "0.0.0.0"),
-        port=int(os.getenv("A2A_AGENT_PORT", 8080))
+    # Agent 스킬 정의
+    image_skill = AgentSkill(
+        id="generate_image",
+        name="이미지 생성",
+        description="사용자의 프롬프트를 기반으로 AI 이미지를 생성합니다",
+        tags=["image", "generation", "ai", "dall-e"],
+        examples=["파리의 에펠탑 앞에서 빈티지 필름 느낌의 사진", "도쿄 골목길의 네온사인"]
     )
 
-    print(f"4. A2A 서버 시작: {server.host}:{server.port}\n")
+    # Agent 카드 정의
+    agent_card = AgentCard(
+        name=os.getenv("A2A_AGENT_NAME", "ImageGenerationAgent"),
+        description="AI 기반 이미지 생성 Agent - 사용자의 프롬프트를 분석하여 최적화된 이미지를 생성합니다",
+        url=f"http://{host}:{port}/",
+        version="1.0.0",
+        default_input_modes=["text"],
+        default_output_modes=["text", "data"],
+        capabilities=AgentCapabilities(streaming=False),
+        skills=[image_skill]
+    )
+
+    # 요청 핸들러 생성
+    request_handler = DefaultRequestHandler(
+        agent_executor=executor,
+        task_store=InMemoryTaskStore()
+    )
+
+    # A2A 서버 생성
+    server = A2AStarletteApplication(
+        agent_card=agent_card,
+        http_handler=request_handler
+    )
+
+    print(f"4. A2A 서버 시작: {host}:{port}\n")
     print("서버가 실행 중입니다. Ctrl+C로 종료하세요.\n")
 
-    # 5. 서버 실행
-    await server.run()
+    # 5. 서버 실행 (uvicorn 사용)
+    config = uvicorn.Config(
+        server.build(),
+        host=host,
+        port=port,
+        log_level="info"
+    )
+    uvicorn_server = uvicorn.Server(config)
+    await uvicorn_server.serve()
 
 
 if __name__ == "__main__":
