@@ -4,6 +4,7 @@ import structlog
 from langchain_core.messages import HumanMessage, AIMessage
 
 from .state import ImageGenerationState
+from ..providers import get_provider, ImageGenerationParams
 
 
 def parse_tool_result(result):
@@ -14,6 +15,7 @@ def parse_tool_result(result):
         except json.JSONDecodeError:
             return {"raw": result}
     return result
+
 
 logger = structlog.get_logger(__name__)
 
@@ -26,6 +28,8 @@ async def extract_keywords_node(
 
     Search MCP의 extract_keywords 도구를 사용하여
     사용자 프롬프트에서 핵심 키워드를 추출합니다.
+
+    Note: Search MCP는 유지 (RAG 및 다른 에이전트에서 재사용 가능)
     """
     try:
         logger.info("Extracting keywords from user prompt")
@@ -71,13 +75,13 @@ async def extract_keywords_node(
 
 
 async def optimize_prompt_node(
-    state: ImageGenerationState,
-    image_tools: list
+    state: ImageGenerationState
 ) -> ImageGenerationState:
     """프롬프트 최적화 노드
 
-    Image Generation MCP의 optimize_prompt_for_image 도구를 사용하여
-    이미지 생성을 위한 프롬프트를 최적화합니다.
+    키워드와 스타일 정보를 결합하여 이미지 생성에 최적화된 프롬프트를 생성합니다.
+
+    리팩토링: Image MCP 대신 직접 로직 구현
     """
     try:
         logger.info("Optimizing prompt for image generation")
@@ -85,29 +89,21 @@ async def optimize_prompt_node(
         user_prompt = state["user_prompt"]
         keywords = state["extracted_keywords"]
 
-        # Image MCP 도구 찾기
-        optimize_tool = next(
-            (tool for tool in image_tools if tool.name == "optimize_prompt_for_image"),
-            None
-        )
+        # 키워드 통합
+        keywords_str = ", ".join(keywords) if keywords else ""
 
-        if not optimize_tool:
-            raise ValueError("optimize_prompt_for_image tool not found")
+        # 품질 향상 접미사
+        quality_suffix = "high quality, detailed, professional"
 
-        # 프롬프트 최적화 실행
-        raw_result = await optimize_tool.ainvoke({
-            "base_prompt": user_prompt,
-            "keywords": keywords
-        })
-        result = parse_tool_result(raw_result)
-
-        optimized_prompt = result.get("optimized_prompt", user_prompt)
+        # 최적화된 프롬프트 구성
+        components = [user_prompt, keywords_str, quality_suffix]
+        optimized_prompt = ", ".join(filter(None, components))
 
         logger.info(f"Optimized prompt: {optimized_prompt[:100]}...")
 
         # 메시지 추가
         state["messages"].append(
-            AIMessage(content=f"프롬프트 최적화 완료")
+            AIMessage(content="프롬프트 최적화 완료")
         )
 
         return {
@@ -127,43 +123,46 @@ async def optimize_prompt_node(
 
 async def generate_image_node(
     state: ImageGenerationState,
-    image_tools: list
+    provider_type: str | None = None
 ) -> ImageGenerationState:
     """이미지 생성 노드
+    providers 모듈을 직접 사용하여 이미지를 생성합니다.
 
-    Image Generation MCP의 generate_image 도구를 사용하여
-    최적화된 프롬프트로 이미지를 생성합니다.
+    Args:
+        state: 현재 상태
+        provider_type: 사용할 프로바이더 (None이면 환경변수에서 결정)
     """
     try:
         logger.info("Generating image")
 
         optimized_prompt = state["optimized_prompt"]
 
-        # Image MCP 도구 찾기
-        generate_tool = next(
-            (tool for tool in image_tools if tool.name == "generate_image"),
-            None
+        # Provider 가져오기 (팩토리 패턴 사용)
+        provider = get_provider(provider_type)
+        logger.info(f"Using provider: {provider.provider_name}")
+
+        # 이미지 생성 파라미터
+        params = ImageGenerationParams(
+            prompt=optimized_prompt,
+            size="1024x1024",
+            quality="standard",
+            style="vivid"
         )
 
-        if not generate_tool:
-            raise ValueError("generate_image tool not found")
-
         # 이미지 생성 실행
-        raw_result = await generate_tool.ainvoke({
-            "prompt": optimized_prompt,
-            "size": "1024x1024",
-            "quality": "standard",
-            "style": "vivid"
-        })
-        result = parse_tool_result(raw_result)
+        result = await provider.generate(params)
 
-        image_url = result.get("url")
-        metadata = result.get("metadata", {})
+        if not result.success:
+            raise ValueError(f"Image generation failed: {result.error}")
 
-        if not image_url:
-            raise ValueError(f"Image generation failed: {result.get('error')}")
+        image_url = result.url
+        metadata = {
+            "provider": result.provider,
+            "revised_prompt": result.revised_prompt,
+            **result.metadata
+        }
 
-        logger.info(f"Image generated successfully: {image_url}")
+        logger.info(f"Image generated successfully: {image_url[:50] if image_url else 'N/A'}...")
 
         # 메시지 추가
         state["messages"].append(

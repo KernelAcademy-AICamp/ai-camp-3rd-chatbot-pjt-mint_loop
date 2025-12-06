@@ -1,5 +1,8 @@
 """고급 사용 예제
 
+리팩토링: Image MCP 제거, Search MCP만 사용
+이미지 생성은 providers 모듈을 직접 호출합니다.
+
 이 예제는 이미지 생성 Agent의 고급 기능을 보여줍니다:
 1. 다양한 스타일 프리셋 사용
 2. 배치 처리
@@ -211,26 +214,38 @@ class AdvancedImageGenerator:
         ]
 
 
-async def example_1_style_presets():
-    """예제 1: 다양한 스타일 프리셋 사용"""
-    print("\n=== 예제 1: 스타일 프리셋 ===\n")
+async def create_agent():
+    """Agent 생성 헬퍼 함수
 
-    # Agent 초기화
+    리팩토링: Search MCP만 연결, Image MCP 제거
+    """
     from langchain_mcp_adapters.client import MultiServerMCPClient
     from src.image_agent.agent import ImageGenerationAgent
 
+    # Search MCP만 연결 (Image MCP 제거)
     mcp_servers = {
-        "search": {"transport": "streamable_http", "url": "http://localhost:8050/mcp"},
-        "image": {"transport": "streamable_http", "url": "http://localhost:8051/mcp"}
+        "search": {
+            "transport": "streamable_http",
+            "url": "http://localhost:8050/mcp"
+        }
     }
 
     mcp_client = MultiServerMCPClient(mcp_servers)
     tools = await mcp_client.get_tools()
 
     search_tools = [t for t in tools if "search" in t.name or "keyword" in t.name]
-    image_tools = [t for t in tools if "image" in t.name or "prompt" in t.name]
 
-    agent = ImageGenerationAgent(search_tools=search_tools, image_tools=image_tools)
+    # image_tools 파라미터 제거됨
+    agent = ImageGenerationAgent(search_tools=search_tools)
+
+    return agent
+
+
+async def example_1_style_presets():
+    """예제 1: 다양한 스타일 프리셋 사용"""
+    print("\n=== 예제 1: 스타일 프리셋 ===\n")
+
+    agent = await create_agent()
     advanced_gen = AdvancedImageGenerator(agent)
 
     # 동일한 프롬프트로 다양한 스타일 테스트
@@ -256,22 +271,7 @@ async def example_2_batch_processing():
     """예제 2: 배치 처리"""
     print("\n=== 예제 2: 배치 처리 ===\n")
 
-    # Agent 초기화
-    from langchain_mcp_adapters.client import MultiServerMCPClient
-    from src.image_agent.agent import ImageGenerationAgent
-
-    mcp_servers = {
-        "search": {"transport": "streamable_http", "url": "http://localhost:8050/mcp"},
-        "image": {"transport": "streamable_http", "url": "http://localhost:8051/mcp"}
-    }
-
-    mcp_client = MultiServerMCPClient(mcp_servers)
-    tools = await mcp_client.get_tools()
-
-    search_tools = [t for t in tools if "search" in t.name or "keyword" in t.name]
-    image_tools = [t for t in tools if "image" in t.name or "prompt" in t.name]
-
-    agent = ImageGenerationAgent(search_tools=search_tools, image_tools=image_tools)
+    agent = await create_agent()
     advanced_gen = AdvancedImageGenerator(agent)
 
     # 여러 프롬프트 배치 처리
@@ -306,22 +306,7 @@ async def example_3_history_management():
     """예제 3: 히스토리 관리"""
     print("\n=== 예제 3: 히스토리 관리 ===\n")
 
-    # Agent 초기화
-    from langchain_mcp_adapters.client import MultiServerMCPClient
-    from src.image_agent.agent import ImageGenerationAgent
-
-    mcp_servers = {
-        "search": {"transport": "streamable_http", "url": "http://localhost:8050/mcp"},
-        "image": {"transport": "streamable_http", "url": "http://localhost:8051/mcp"}
-    }
-
-    mcp_client = MultiServerMCPClient(mcp_servers)
-    tools = await mcp_client.get_tools()
-
-    search_tools = [t for t in tools if "search" in t.name or "keyword" in t.name]
-    image_tools = [t for t in tools if "image" in t.name or "prompt" in t.name]
-
-    agent = ImageGenerationAgent(search_tools=search_tools, image_tools=image_tools)
+    agent = await create_agent()
     advanced_gen = AdvancedImageGenerator(agent)
 
     # 최근 히스토리 조회
@@ -352,6 +337,7 @@ async def main():
     """고급 예제 실행"""
 
     print("=== 이미지 생성 Agent 고급 사용 예제 ===")
+    print("(리팩토링: Image MCP 제거, providers 직접 호출)")
 
     # 예제 선택
     print("\n실행할 예제를 선택하세요:")

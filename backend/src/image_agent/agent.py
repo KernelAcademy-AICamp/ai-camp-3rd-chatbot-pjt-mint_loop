@@ -1,4 +1,8 @@
-"""이미지 생성 LangGraph Agent"""
+"""이미지 생성 LangGraph Agent
+
+리팩토링: Image MCP 의존성 제거, providers 직접 호출
+Search MCP는 키워드 추출에 활용 (RAG 및 다른 에이전트에서 재사용 가능)
+"""
 import structlog
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, END
@@ -16,31 +20,39 @@ class ImageGenerationAgent:
     LangGraph를 사용하여 구현된 이미지 생성 워크플로우:
     1. 사용자 입력 수신
     2. 키워드 추출 (Search MCP)
-    3. 프롬프트 최적화 (Image MCP)
-    4. 이미지 생성 (Image MCP)
+    3. 프롬프트 최적화 (직접 구현)
+    4. 이미지 생성 (providers 직접 호출)
+
+    리팩토링 변경사항:
+    - image_tools 의존성 제거
+    - providers 모듈 직접 사용
+    - Search MCP만 유지 (재사용성)
     """
 
     def __init__(
         self,
         search_tools: list,
-        image_tools: list,
+        provider_type: str | None = None,
         checkpointer: MemorySaver | None = None
     ):
         """Agent 초기화
 
         Args:
-            search_tools: Search MCP 서버의 도구 리스트
-            image_tools: Image Generation MCP 서버의 도구 리스트
+            search_tools: Search MCP 서버의 도구 리스트 (키워드 추출용)
+            provider_type: 이미지 생성 프로바이더 타입 (None이면 환경변수에서 결정)
             checkpointer: 체크포인터 (선택사항)
         """
         self.search_tools = search_tools
-        self.image_tools = image_tools
+        self.provider_type = provider_type
         self.checkpointer = checkpointer or MemorySaver()
 
         # 그래프 빌드
         self.graph = self._build_graph()
 
-        logger.info("ImageGenerationAgent initialized")
+        logger.info(
+            "ImageGenerationAgent initialized",
+            provider_type=provider_type or "env-default"
+        )
 
     def _build_graph(self):
         """LangGraph 워크플로우 구축"""
@@ -53,10 +65,12 @@ class ImageGenerationAgent:
             return await extract_keywords_node(state, self.search_tools)
 
         async def _optimize_prompt(state):
-            return await optimize_prompt_node(state, self.image_tools)
+            # 리팩토링: 더 이상 image_tools를 받지 않음
+            return await optimize_prompt_node(state)
 
         async def _generate_image(state):
-            return await generate_image_node(state, self.image_tools)
+            # 리팩토링: providers 직접 호출
+            return await generate_image_node(state, self.provider_type)
 
         # 노드 추가
         workflow.add_node("extract_keywords", _extract_keywords)
