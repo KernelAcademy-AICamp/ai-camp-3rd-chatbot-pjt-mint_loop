@@ -25,12 +25,12 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const variants = {
       primary:
-        'bg-sepia-600 text-white hover:bg-sepia-700 active:bg-sepia-800 shadow-sm hover:shadow-md',
+        'bg-sepia-800 text-white hover:bg-sepia-700 active:bg-sepia-900 shadow-sm hover:shadow-md',
       secondary:
         'bg-cream-100 text-gray-800 hover:bg-cream-200 border border-cream-300',
       ghost: 'bg-transparent text-gray-600 hover:bg-cream-100',
       outline:
-        'bg-transparent border-2 border-sepia-600 text-sepia-600 hover:bg-sepia-50',
+        'bg-transparent border-2 border-sepia-800 text-sepia-800 hover:bg-sepia-50',
     };
 
     const sizes = {
@@ -44,7 +44,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           'inline-flex items-center justify-center font-medium transition-all duration-200',
-          'focus:outline-none focus:ring-2 focus:ring-sepia-400 focus:ring-offset-2',
+          'focus:outline-none focus:ring-2 focus:ring-sepia-800 focus:ring-offset-2',
           'disabled:opacity-50 disabled:pointer-events-none',
           'transform hover:-translate-y-0.5 active:translate-y-0',
           variants[variant],

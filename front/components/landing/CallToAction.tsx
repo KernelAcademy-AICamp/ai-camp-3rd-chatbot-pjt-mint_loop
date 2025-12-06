@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 
 export function CallToAction() {
   return (
-    <section className="py-24 px-6 bg-sepia-600 text-white relative overflow-hidden">
+    <section className="py-24 px-6 bg-sepia-800 text-white relative overflow-hidden">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-10">
         <div
@@ -44,7 +44,7 @@ export function CallToAction() {
             <Link href="/chat">
               <Button
                 size="lg"
-                className="bg-white text-sepia-700 hover:bg-cream-100 px-10 py-4 text-lg"
+                className="bg-white text-sepia-800 hover:bg-cream-100 px-10 py-4 text-lg"
               >
                 무료로 시작하기 →
               </Button>

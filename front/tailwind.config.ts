@@ -10,33 +10,33 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Primary - Sepia/Warm Browns
+        // Primary - Black Tones
         sepia: {
-          50: '#FDF8F4',
-          100: '#F9EFE7',
-          200: '#F0DCCC',
-          300: '#E3C4A9',
-          400: '#D4A77A',
-          500: '#C4894D',
-          600: '#A67035',
-          700: '#7D5428',
-          800: '#543A1D',
-          900: '#2E2012',
+          50: '#F8F9FA',
+          100: '#E9ECEF',
+          200: '#DEE2E6',
+          300: '#CED4DA',
+          400: '#ADB5BD',
+          500: '#6C757D',
+          600: '#495057',
+          700: '#343A40',
+          800: '#212529',
+          900: '#0A0C0E',
         },
-        // Neutral - Cream Tones
+        // Neutral - Cool Gray Tones
         cream: {
-          50: '#FDFBF9',
-          100: '#FAF7F4',
-          200: '#F4EDE6',
-          300: '#E8DDD2',
-          400: '#D4C4B2',
+          50: '#F8FAFC',
+          100: '#F1F5F9',
+          200: '#E2E8F0',
+          300: '#CBD5E1',
+          400: '#94A3B8',
         },
         // Film Aesthetic Colors
         film: {
-          warm: '#E8D4B8',      // Kodak ColorPlus
-          neutral: '#D8D0C8',   // Kodak Portra
-          cool: '#C8D4D8',      // Fuji Superia
-          mono: '#B0B0B0',      // Ilford HP5
+          warm: '#B8D4E8',      // Cool tone
+          neutral: '#C8D4E0',   // Neutral blue
+          cool: '#A8C4D8',      // Deep cool
+          mono: '#94A3B8',      // Slate gray
         },
       },
       fontFamily: {
