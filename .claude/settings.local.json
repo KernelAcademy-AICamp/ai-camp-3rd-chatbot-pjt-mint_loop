@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl:*)"
+      "Bash(source:*)",
+      "Bash(pip install:*)",
+      "Bash(python test_places_api.py:*)"
     ],
     "deny": [],
     "ask": []

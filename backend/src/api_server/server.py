@@ -105,6 +105,40 @@ class Activity(BaseModel):
     photoOpportunity: str
 
 
+class PlacePhoto(BaseModel):
+    """Google Places 사진 정보"""
+    reference: str
+    url: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+
+
+class PlaceReview(BaseModel):
+    """Google Places 리뷰 정보"""
+    author: Optional[str] = None
+    rating: Optional[int] = None
+    text: Optional[str] = None
+    time: Optional[str] = None
+
+
+class PlaceDetails(BaseModel):
+    """Google Places API 상세 정보"""
+    place_id: Optional[str] = None
+    google_name: Optional[str] = None
+    google_address: Optional[str] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    google_maps_url: Optional[str] = None
+    rating: Optional[float] = None
+    user_ratings_total: Optional[int] = None
+    price_level: Optional[int] = None
+    opening_hours: list[str] = []
+    is_open_now: Optional[bool] = None
+    photos: list[PlacePhoto] = []
+    reviews: list[PlaceReview] = []
+    location: Optional[dict] = None
+
+
 class Destination(BaseModel):
     """여행지 정보"""
     id: str
@@ -124,6 +158,8 @@ class Destination(BaseModel):
     photographyTips: list[str] = []
     storyPrompt: Optional[str] = None
     activities: list[Activity] = []
+    # Google Places API 연동 데이터
+    placeDetails: Optional[PlaceDetails] = None
 
 
 class RecommendationResponse(BaseModel):

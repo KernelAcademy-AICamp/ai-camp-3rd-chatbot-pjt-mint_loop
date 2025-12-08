@@ -22,6 +22,40 @@ class Activity(TypedDict, total=False):
     photoOpportunity: str
 
 
+class PlacePhoto(TypedDict, total=False):
+    """Google Places 사진 정보"""
+    reference: str
+    url: Optional[str]
+    width: Optional[int]
+    height: Optional[int]
+
+
+class PlaceReview(TypedDict, total=False):
+    """Google Places 리뷰 정보"""
+    author: str
+    rating: int
+    text: str
+    time: str
+
+
+class PlaceDetails(TypedDict, total=False):
+    """Google Places API에서 가져온 장소 상세 정보"""
+    place_id: Optional[str]
+    google_name: Optional[str]
+    google_address: Optional[str]
+    phone: Optional[str]
+    website: Optional[str]
+    google_maps_url: Optional[str]
+    rating: Optional[float]
+    user_ratings_total: Optional[int]
+    price_level: Optional[int]
+    opening_hours: list[str]
+    is_open_now: Optional[bool]
+    photos: list[PlacePhoto]
+    reviews: list[PlaceReview]
+    location: Optional[dict]  # {"lat": float, "lng": float}
+
+
 class Destination(TypedDict, total=False):
     """여행지 정보"""
     id: str
@@ -41,6 +75,8 @@ class Destination(TypedDict, total=False):
     photographyTips: list[str]
     storyPrompt: Optional[str]
     activities: list[Activity]
+    # Google Places API 연동 데이터
+    placeDetails: Optional[PlaceDetails]
 
 
 class RecommendationState(TypedDict):

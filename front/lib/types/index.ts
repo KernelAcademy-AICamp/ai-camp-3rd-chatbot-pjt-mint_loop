@@ -59,6 +59,8 @@ export interface Destination {
   storyPrompt?: string;          // 이 장소에서의 스토리 제안
   whyHidden?: string;            // 왜 숨겨진 명소인지
   photographyTips?: string[];    // 사진 촬영 팁
+  // Google Places API 연동 데이터
+  placeDetails?: PlaceDetails;   // Google Places 상세 정보
 }
 
 // Activity/Experience 타입
@@ -69,6 +71,41 @@ export interface Activity {
   bestTime?: string;
   localTip?: string;
   photoOpportunity?: string;
+}
+
+// Google Places API 타입
+export interface PlacePhoto {
+  reference: string;
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface PlaceReview {
+  author?: string;
+  rating?: number;
+  text?: string;
+  time?: string;
+}
+
+export interface PlaceDetails {
+  place_id?: string;
+  google_name?: string;
+  google_address?: string;
+  phone?: string;
+  website?: string;
+  google_maps_url?: string;
+  rating?: number;
+  user_ratings_total?: number;
+  price_level?: number;
+  opening_hours?: string[];
+  is_open_now?: boolean;
+  photos?: PlacePhoto[];
+  reviews?: PlaceReview[];
+  location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 // Hidden Spot Types

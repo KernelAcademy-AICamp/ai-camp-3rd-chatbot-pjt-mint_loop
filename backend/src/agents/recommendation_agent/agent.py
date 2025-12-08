@@ -15,6 +15,7 @@ from .nodes import (
     build_prompt_node,
     generate_recommendations_node,
     parse_response_node,
+    enrich_with_places_node,
     get_fallback_destinations,
 )
 
@@ -82,13 +83,20 @@ class RecommendationAgent:
         workflow.add_node("build_prompt", build_prompt_node)
         workflow.add_node("generate_recommendations", _generate_recommendations)
         workflow.add_node("parse_response", parse_response_node)
+        workflow.add_node("enrich_with_places", enrich_with_places_node)
 
         # 엣지 정의
+        # 1. 사용자 선호도 분석 → 프롬프트 구성
+        # 2. 프롬프트 구성 → LLM 추천 생성
+        # 3. LLM 추천 생성 → 응답 파싱
+        # 4. 응답 파싱 → Google Places API 정보 보강
+        # 5. Places 정보 보강 → 완료
         workflow.set_entry_point("analyze_preferences")
         workflow.add_edge("analyze_preferences", "build_prompt")
         workflow.add_edge("build_prompt", "generate_recommendations")
         workflow.add_edge("generate_recommendations", "parse_response")
-        workflow.add_edge("parse_response", END)
+        workflow.add_edge("parse_response", "enrich_with_places")
+        workflow.add_edge("enrich_with_places", END)
 
         # 컴파일
         return workflow.compile(

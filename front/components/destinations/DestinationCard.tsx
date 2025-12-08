@@ -34,9 +34,17 @@ export function DestinationCard({ destination, index }: DestinationCardProps) {
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center gap-4 p-4 text-left"
       >
-        {/* Thumbnail Placeholder */}
+        {/* Thumbnail - Google Places 사진 또는 기본 아이콘 */}
         <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden relative bg-sepia-100 flex items-center justify-center">
-          <span className="text-3xl">📍</span>
+          {destination.placeDetails?.photos?.[0]?.url ? (
+            <img
+              src={destination.placeDetails.photos[0].url}
+              alt={destination.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <span className="text-3xl">📍</span>
+          )}
         </div>
 
         {/* Title & Location */}
@@ -49,6 +57,11 @@ export function DestinationCard({ destination, index }: DestinationCardProps) {
           </p>
           {!isExpanded && (
             <div className="flex items-center gap-2 mt-2">
+              {destination.placeDetails?.rating && (
+                <Badge variant="primary" size="sm">
+                  ⭐ {destination.placeDetails.rating.toFixed(1)}
+                </Badge>
+              )}
               <Badge variant="secondary" size="sm">
                 📸 {destination.photographyScore}/10
               </Badge>
@@ -80,6 +93,137 @@ export function DestinationCard({ destination, index }: DestinationCardProps) {
             className="overflow-hidden"
           >
             <div className="px-4 pb-6 space-y-4">
+              {/* Google Places Photos Gallery */}
+              {destination.placeDetails?.photos && destination.placeDetails.photos.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {destination.placeDetails.photos.slice(0, 5).map((photo, idx) => (
+                    <div
+                      key={idx}
+                      className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden"
+                    >
+                      {photo.url && (
+                        <img
+                          src={photo.url}
+                          alt={`${destination.name} ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Google Rating & Info */}
+              {destination.placeDetails && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
+                  <h4 className="text-sm font-medium text-blue-800 mb-3 flex items-center gap-2">
+                    <span>📍</span> Google Places 정보
+                  </h4>
+                  <div className="space-y-2">
+                    {/* 평점 */}
+                    {destination.placeDetails.rating && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-yellow-500">⭐</span>
+                        <span className="font-semibold text-gray-900">
+                          {destination.placeDetails.rating.toFixed(1)}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          ({destination.placeDetails.user_ratings_total?.toLocaleString()}개 리뷰)
+                        </span>
+                      </div>
+                    )}
+                    {/* 주소 */}
+                    {destination.placeDetails.google_address && (
+                      <p className="text-sm text-gray-600">
+                        📫 {destination.placeDetails.google_address}
+                      </p>
+                    )}
+                    {/* 영업 상태 */}
+                    {destination.placeDetails.is_open_now !== undefined && (
+                      <p className={cn(
+                        "text-sm font-medium",
+                        destination.placeDetails.is_open_now ? "text-green-600" : "text-red-600"
+                      )}>
+                        {destination.placeDetails.is_open_now ? "🟢 영업 중" : "🔴 영업 종료"}
+                      </p>
+                    )}
+                    {/* 영업시간 */}
+                    {destination.placeDetails.opening_hours && destination.placeDetails.opening_hours.length > 0 && (
+                      <details className="text-sm">
+                        <summary className="cursor-pointer text-blue-700 hover:text-blue-800">
+                          🕐 영업시간 보기
+                        </summary>
+                        <ul className="mt-2 space-y-1 pl-4 text-gray-600">
+                          {destination.placeDetails.opening_hours.map((hours, idx) => (
+                            <li key={idx}>{hours}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                    {/* 연락처 & 링크 */}
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {destination.placeDetails.phone && (
+                        <a
+                          href={`tel:${destination.placeDetails.phone}`}
+                          className="inline-flex items-center gap-1 text-xs bg-white px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+                        >
+                          📞 {destination.placeDetails.phone}
+                        </a>
+                      )}
+                      {destination.placeDetails.website && (
+                        <a
+                          href={destination.placeDetails.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs bg-white px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+                        >
+                          🌐 웹사이트
+                        </a>
+                      )}
+                      {destination.placeDetails.google_maps_url && (
+                        <a
+                          href={destination.placeDetails.google_maps_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs bg-white px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+                        >
+                          🗺️ Google Maps
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Google Reviews */}
+              {destination.placeDetails?.reviews && destination.placeDetails.reviews.length > 0 && (
+                <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-4 border border-yellow-100">
+                  <h4 className="text-sm font-medium text-yellow-800 mb-3 flex items-center gap-2">
+                    <span>💬</span> 실제 방문자 리뷰
+                  </h4>
+                  <div className="space-y-3">
+                    {destination.placeDetails.reviews.slice(0, 3).map((review, idx) => (
+                      <div key={idx} className="bg-white rounded-lg p-3 border border-yellow-100">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm text-gray-900">
+                            {review.author}
+                          </span>
+                          <span className="text-yellow-500 text-xs">
+                            {'⭐'.repeat(review.rating || 0)}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {review.time}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 line-clamp-3">
+                          {review.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Description */}
               <p className="text-gray-700 leading-relaxed">
                 {destination.description}
