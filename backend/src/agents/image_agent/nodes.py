@@ -1,7 +1,7 @@
 """이미지 생성 Agent의 워크플로우 노드 구현
 
 Google Gemini Imagen 모델을 사용합니다.
-기본 모델: imagen-3.0-generate-002 (nano-banana)
+기본 모델: imagen-3.0-generate-001 (nano-banana)
 """
 import json
 import structlog

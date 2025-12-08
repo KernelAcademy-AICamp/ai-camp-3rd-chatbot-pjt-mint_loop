@@ -1,8 +1,9 @@
 """여행지 추천 LangGraph Agent
 
-Google Gemini 모델을 사용한 여행지 추천 워크플로우.
-기본 모델: gemini-2.5-pro
+Strategy Pattern을 통해 OpenAI/Gemini 등 다양한 LLM Provider를 지원합니다.
+기본 Provider: OpenAI (gpt-4o)
 """
+import os
 import structlog
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, END
@@ -15,10 +16,13 @@ from .nodes import (
     generate_recommendations_node,
     parse_response_node,
     get_fallback_destinations,
-    DEFAULT_TEXT_MODEL,
 )
 
 logger = structlog.get_logger(__name__)
+
+# 기본 설정
+DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 
 class RecommendationAgent:
@@ -27,24 +31,27 @@ class RecommendationAgent:
     LangGraph를 사용하여 구현된 여행지 추천 워크플로우:
     1. 사용자 선호도 분석
     2. 프롬프트 구성
-    3. Gemini 추천 생성
+    3. LLM 추천 생성 (OpenAI/Gemini 선택 가능)
     4. 응답 파싱
 
-    Google Gemini 모델을 사용합니다.
+    Strategy Pattern을 통해 다양한 LLM Provider를 지원합니다.
     """
 
     def __init__(
         self,
+        provider_type: str | None = None,
         model: str | None = None,
         checkpointer: MemorySaver | None = None
     ):
         """Agent 초기화
 
         Args:
-            model: 사용할 Gemini 모델 (기본값: gemini-2.5-pro)
+            provider_type: LLM Provider 타입 ("openai", "gemini")
+            model: 사용할 LLM 모델 (기본값: Provider별 기본 모델)
             checkpointer: 체크포인터 (선택사항)
         """
-        self.model = model or DEFAULT_TEXT_MODEL
+        self.provider_type = provider_type or DEFAULT_LLM_PROVIDER
+        self.model = model or DEFAULT_LLM_MODEL
         self.checkpointer = checkpointer or MemorySaver()
 
         # 그래프 빌드
@@ -52,6 +59,7 @@ class RecommendationAgent:
 
         logger.info(
             "RecommendationAgent initialized",
+            provider=self.provider_type,
             model=self.model
         )
 
@@ -61,9 +69,13 @@ class RecommendationAgent:
         # StateGraph 생성 (전체 상태 스키마 사용)
         workflow = StateGraph(RecommendationState)
 
-        # 모델을 인자로 전달하는 래퍼 함수
+        # Provider 타입과 모델을 인자로 전달하는 래퍼 함수
         async def _generate_recommendations(state):
-            return await generate_recommendations_node(state, self.model)
+            return await generate_recommendations_node(
+                state,
+                provider_type=self.provider_type,
+                model=self.model
+            )
 
         # 노드 추가
         workflow.add_node("analyze_preferences", analyze_preferences_node)
@@ -88,6 +100,7 @@ class RecommendationAgent:
         self,
         input_data: RecommendationInput,
         thread_id: str = "default",
+        provider_type: str | None = None,
         model: str | None = None
     ) -> RecommendationOutput:
         """여행지 추천 실행
@@ -99,7 +112,8 @@ class RecommendationAgent:
                 - travel_scene: 꿈꾸는 여행 장면
                 - travel_destination: 관심 지역
             thread_id: 대화 스레드 ID
-            model: 이 요청에서 사용할 모델 (선택사항, 인스턴스 기본값 오버라이드)
+            provider_type: 이 요청에서 사용할 Provider (선택, 인스턴스 기본값 오버라이드)
+            model: 이 요청에서 사용할 모델 (선택, 인스턴스 기본값 오버라이드)
 
         Returns:
             RecommendationOutput: 추천 결과
@@ -109,13 +123,15 @@ class RecommendationAgent:
                 - is_fallback: 폴백 데이터 사용 여부
         """
         try:
-            # 요청별 모델 오버라이드 가능
+            # 요청별 오버라이드 가능
+            actual_provider = provider_type or self.provider_type
             actual_model = model or self.model
 
             logger.info(
                 "Starting recommendation generation",
                 concept=input_data.get("concept"),
                 destination=input_data.get("travel_destination"),
+                provider=actual_provider,
                 model=actual_model
             )
 
@@ -126,7 +142,8 @@ class RecommendationAgent:
                 "concept": input_data.get("concept"),
                 "travel_scene": input_data.get("travel_scene"),
                 "travel_destination": input_data.get("travel_destination"),
-                "model": actual_model,  # 모델 정보를 state에 포함
+                "llm_provider": actual_provider,
+                "model": actual_model,
                 "user_profile": {},
                 "system_prompt": "",
                 "user_prompt": "",

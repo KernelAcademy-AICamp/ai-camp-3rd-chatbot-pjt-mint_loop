@@ -7,10 +7,18 @@ import { cn } from '@/lib/utils/cn';
 
 export function Header() {
   const pathname = usePathname();
-  const isHome = pathname === '/';
+  const [mounted, setMounted] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
+  const isHome = pathname === '/';
+
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
     const handleScroll = () => {
       const scrollPosition = window.scrollY;
       setIsScrolled(scrollPosition > 50);
@@ -18,7 +26,7 @@ export function Header() {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [mounted]);
 
   return (
     <header

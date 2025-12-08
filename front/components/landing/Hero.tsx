@@ -14,15 +14,22 @@ const slides = [
 ];
 
 export function Hero() {
+  const [mounted, setMounted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % slides.length);
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [mounted]);
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-cream-50">
@@ -71,13 +78,22 @@ export function Hero() {
           </motion.span>
 
           {/* Main Headline */}
-          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-gray-900 leading-tight mb-8 drop-shadow-[0_2px_10px_rgba(255,255,255,0.8)]">
-            당신은 티켓만 끊으세요.
-            <br />
-            <span className="text-white font-normal">여행의 &apos;분위기&apos;</span>는
-            <br />
-            우리가 챙겨드립니다.
-          </h1>
+          <div className="relative inline-block mb-8">
+            <div
+              className="absolute -inset-8 opacity-60"
+              style={{
+                background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.2) 40%, transparent 70%)',
+                filter: 'blur(20px)',
+              }}
+            />
+            <h1 className="relative font-serif text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-gray-900 leading-tight">
+              당신은 티켓만 끊으세요.
+              <br />
+              <span className="text-white font-normal">여행의 &apos;분위기&apos;</span>는
+              <br />
+              우리가 챙겨드립니다.
+            </h1>
+          </div>
 
           {/* Subtitle */}
           <p className="text-lg md:text-xl lg:text-2xl text-white max-w-3xl mx-auto mb-12 font-normal leading-relaxed md:leading-loose tracking-wide drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
@@ -115,8 +131,8 @@ export function Hero() {
         animate={{ y: [0, 8, 0] }}
         transition={{ duration: 2, repeat: Infinity }}
       >
-        <div className="w-6 h-10 border-2 border-gray-400 rounded-full flex justify-center pt-2">
-          <div className="w-1.5 h-3 bg-gray-400 rounded-full" />
+        <div className="w-6 h-10 border-2 border-white rounded-full flex justify-center pt-2">
+          <div className="w-1.5 h-3 bg-white rounded-full" />
         </div>
       </motion.div>
     </section>

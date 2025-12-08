@@ -1,8 +1,4 @@
-"""기본 사용 예제
-
-리팩토링: Image MCP 제거, Search MCP만 사용
-이미지 생성은 providers 모듈을 직접 호출합니다.
-"""
+"""기본 사용 예제"""
 import asyncio
 import os
 from dotenv import load_dotenv

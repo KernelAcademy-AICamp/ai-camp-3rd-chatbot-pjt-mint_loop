@@ -68,7 +68,8 @@ class RecommendationState(TypedDict):
     concept: Optional[str]
     travel_scene: Optional[str]
     travel_destination: Optional[str]
-    model: Optional[str]  # 사용할 Gemini 모델 (동적 설정)
+    llm_provider: Optional[str]  # LLM Provider 타입 ("openai", "gemini")
+    model: Optional[str]  # 사용할 LLM 모델 (동적 설정)
 
     # 중간 처리 데이터
     user_profile: dict

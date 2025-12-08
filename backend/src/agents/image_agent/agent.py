@@ -1,7 +1,7 @@
 """이미지 생성 LangGraph Agent
 
 Google Gemini Imagen 모델을 사용합니다.
-기본 모델: imagen-3.0-generate-002 (nano-banana)
+기본 모델: imagen-3.0-generate-001 (nano-banana)
 Search MCP는 키워드 추출에 활용 (RAG 및 다른 에이전트에서 재사용 가능)
 """
 import structlog
@@ -30,7 +30,7 @@ class ImageGenerationAgent:
     4. 이미지 생성 (Gemini Imagen)
 
     Google Gemini Imagen 모델을 사용합니다.
-    기본 모델: imagen-3.0-generate-002 (nano-banana)
+    기본 모델: imagen-3.0-generate-001 (nano-banana)
     """
 
     def __init__(

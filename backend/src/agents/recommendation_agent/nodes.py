@@ -1,7 +1,7 @@
 """여행지 추천 Agent의 워크플로우 노드 구현
 
 각 노드는 RecommendationState를 입력받아 업데이트된 상태를 반환합니다.
-Google Gemini (gemini-2.5-pro) 모델을 사용합니다.
+Strategy Pattern을 통해 OpenAI/Gemini 등 다양한 LLM Provider를 지원합니다.
 """
 import json
 import os
@@ -9,33 +9,14 @@ import structlog
 from langchain_core.messages import AIMessage
 
 from .state import RecommendationState, Destination
+from ...providers import get_llm_provider, LLMGenerationParams
 
 
 logger = structlog.get_logger(__name__)
 
-# 기본 모델 설정
-DEFAULT_TEXT_MODEL = "gemini-2.5-flash"
-
-
-def _get_gemini_credential() -> str | None:
-    """Gemini API 키를 환경변수에서 가져옴"""
-    # GEMINI_API_KEY 우선, 없으면 GOOGLE_API_KEY
-    return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-
-
-def get_gemini_client():
-    """Google Gemini 클라이언트 반환 (lazy initialization)"""
-    try:
-        from google import genai
-        credential = _get_gemini_credential()
-        if not credential:
-            raise ValueError("GEMINI_API_KEY 또는 GOOGLE_API_KEY 환경변수가 필요합니다")
-        return genai.Client(api_key=credential)
-    except ImportError:
-        raise ImportError(
-            "google-genai 패키지가 필요합니다. "
-            "pip install google-genai 로 설치하세요."
-        )
+# 기본 설정
+DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 
 # 컨셉별 분위기 키워드
@@ -110,7 +91,7 @@ async def analyze_preferences_node(state: RecommendationState) -> Recommendation
 async def build_prompt_node(state: RecommendationState) -> RecommendationState:
     """프롬프트 구성 노드
 
-    분석된 사용자 프로필을 기반으로 Gemini 호출에 사용할
+    분석된 사용자 프로필을 기반으로 LLM 호출에 사용할
     시스템 프롬프트와 사용자 프롬프트를 생성합니다.
     """
     try:
@@ -204,52 +185,78 @@ async def build_prompt_node(state: RecommendationState) -> RecommendationState:
 
 async def generate_recommendations_node(
     state: RecommendationState,
+    provider_type: str | None = None,
     model: str | None = None
 ) -> RecommendationState:
     """추천 생성 노드
 
-    Google Gemini를 호출하여 여행지 추천을 생성합니다.
+    LLMProvider를 통해 여행지 추천을 생성합니다.
+    Strategy Pattern으로 OpenAI/Gemini 등 다양한 Provider를 지원합니다.
 
     Args:
         state: 현재 상태
-        model: 사용할 모델 (None이면 state에서 가져오거나 기본값 사용)
+        provider_type: 사용할 Provider 타입 ("openai", "gemini")
+        model: 사용할 모델 (None이면 Provider 기본값 사용)
     """
     try:
-        # 모델 결정: 인자 > state > 환경변수 > 기본값
+        # Provider 타입 결정: 인자 > state > 환경변수 > 기본값
+        actual_provider_type = (
+            provider_type
+            or state.get("llm_provider")
+            or os.getenv("LLM_PROVIDER")
+            or DEFAULT_LLM_PROVIDER
+        )
+
+        # 모델 결정: 인자 > state > 환경변수 > Provider 기본값
         actual_model = (
             model
             or state.get("model")
-            or os.getenv("GEMINI_TEXT_MODEL")
-            or DEFAULT_TEXT_MODEL
+            or os.getenv("LLM_MODEL")
         )
 
-        logger.info(f"Generating recommendations via Gemini ({actual_model})")
+        logger.info(
+            f"Generating recommendations via {actual_provider_type}",
+            provider=actual_provider_type,
+            model=actual_model or "default"
+        )
+
+        # LLM Provider 가져오기 (Strategy Pattern)
+        llm_provider = get_llm_provider(actual_provider_type)
+
+        # 모델이 지정되지 않았으면 Provider 기본값 사용
+        if not actual_model:
+            actual_model = llm_provider.default_model
 
         system_prompt = state["system_prompt"]
         user_prompt = state["user_prompt"]
 
-        # Gemini 클라이언트 가져오기
-        client = get_gemini_client()
-
-        # Gemini API 호출
-        response = client.models.generate_content(
-            model=actual_model,
-            contents=f"{system_prompt}\n\n{user_prompt}",
-            config={
-                "temperature": 0.8,
-                "response_mime_type": "application/json",
-            }
+        # LLM 생성 파라미터 구성
+        params = LLMGenerationParams(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
+            temperature=0.8,
+            response_format="json",
         )
 
-        response_content = response.text
-        if not response_content:
-            raise ValueError("No response from Gemini")
+        # LLM 호출
+        result = await llm_provider.generate(params, model=actual_model)
 
-        logger.info(f"Gemini response received successfully (model: {actual_model})")
+        if not result.success:
+            raise ValueError(f"LLM 생성 실패: {result.error}")
+
+        response_content = result.content
+        if not response_content:
+            raise ValueError("LLM 응답이 비어있습니다")
+
+        logger.info(
+            f"LLM response received successfully",
+            provider=actual_provider_type,
+            model=actual_model,
+        )
 
         # 메시지 추가
         new_messages = state["messages"] + [
-            AIMessage(content=f"Gemini ({actual_model}) 추천 생성 완료")
+            AIMessage(content=f"{actual_provider_type} ({actual_model}) 추천 생성 완료")
         ]
 
         return {
@@ -271,11 +278,11 @@ async def generate_recommendations_node(
 async def parse_response_node(state: RecommendationState) -> RecommendationState:
     """응답 파싱 노드
 
-    Gemini 응답을 파싱하여 구조화된 여행지 목록으로 변환합니다.
+    LLM 응답을 파싱하여 구조화된 여행지 목록으로 변환합니다.
     파싱 실패 시 폴백 데이터를 반환합니다.
     """
     try:
-        logger.info("Parsing Gemini response")
+        logger.info("Parsing LLM response")
 
         raw_response = state.get("raw_response", "")
 
@@ -286,13 +293,13 @@ async def parse_response_node(state: RecommendationState) -> RecommendationState
         try:
             parsed_response = json.loads(raw_response)
         except json.JSONDecodeError:
-            # Gemini가 마크다운 코드블록으로 감싸서 반환할 수 있음
+            # 마크다운 코드블록으로 감싸져 있을 수 있음
             import re
             json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw_response)
             if json_match:
                 parsed_response = json.loads(json_match.group(1))
             else:
-                # 그냥 텍스트에서 JSON 추출 시도
+                # 텍스트에서 JSON 추출 시도
                 json_start = raw_response.find('{')
                 json_end = raw_response.rfind('}') + 1
                 if json_start != -1 and json_end > json_start:
