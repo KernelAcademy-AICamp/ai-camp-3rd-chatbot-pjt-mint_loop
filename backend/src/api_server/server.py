@@ -28,7 +28,7 @@ def find_and_load_dotenv():
 find_and_load_dotenv()
 
 # 상위 패키지에서 providers import
-from ..providers import get_provider, ImageGenerationParams
+from ..providers import get_provider, get_llm_provider, ImageGenerationParams, LLMGenerationParams
 # RecommendationAgent import
 from ..agents import RecommendationAgent
 
@@ -40,6 +40,10 @@ DEFAULT_IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "imagen-3.0-generate-001")
 
 # RecommendationAgent 인스턴스 (싱글톤)
 recommendation_agent = RecommendationAgent(model=DEFAULT_TEXT_MODEL)
+
+# LLM Provider 인스턴스 (프롬프트 최적화용 - OpenAI GPT 사용)
+PROMPT_OPTIMIZATION_MODEL = "gpt-4o-mini"
+llm_provider = get_llm_provider("openai", model=PROMPT_OPTIMIZATION_MODEL)
 
 # 컨셉별 필름 스타일 프롬프트 매핑
 CONCEPT_STYLE_PROMPTS = {
@@ -170,37 +174,156 @@ class RecommendationResponse(BaseModel):
     isFallback: bool = False
 
 
-def build_travel_prompt(request: GenerateRequest) -> str:
-    """여행 프롬프트 구성"""
-    # 기본 여행 프롬프트
-    base_prompt = f"A person traveling and exploring {request.destination}"
+async def optimize_destination_prompt(destination: str, additional_prompt: str = "") -> str:
+    """LLM을 사용하여 한국어 여행지 설명을 영어 이미지 프롬프트로 최적화
 
-    # 컨셉 스타일
-    concept_style = CONCEPT_STYLE_PROMPTS.get(request.concept, CONCEPT_STYLE_PROMPTS["filmlog"])
+    Args:
+        destination: 사용자가 입력한 여행지 설명 (한국어 가능)
+        additional_prompt: 추가 설명 (한국어 가능)
 
-    # 필름 스톡 스타일
+    Returns:
+        영어로 최적화된 장소 및 장면 설명
+    """
+    try:
+        # 입력 텍스트 결합
+        input_text = destination
+        if additional_prompt:
+            input_text = f"{destination}, {additional_prompt}"
+
+        system_prompt = """You are an expert at converting travel destination descriptions into optimized English prompts for image generation.
+
+Your task:
+1. Translate any non-English text to English
+2. Extract and emphasize the KEY ENVIRONMENT/LOCATION type (beach, ocean, mountain, forest, city, etc.)
+3. Extract scene details (time of day, weather, mood)
+4. Output a concise, clear English description optimized for image generation
+
+IMPORTANT: The environment/location keywords must be prominent and clear.
+
+Output format (English only, no explanations):
+[location with environment type], [scene description], [atmosphere/mood]
+
+Examples:
+Input: "포르투갈 나자레 해안의 파도, 해질녘 혼자 걷고 있는 모습"
+Output: "Nazaré beach coastline in Portugal with ocean waves, person walking alone at sunset, golden hour atmosphere"
+
+Input: "교토의 대나무 숲, 아침 안개 속 산책"
+Output: "Arashiyama bamboo forest in Kyoto Japan, morning walk through misty bamboo grove, serene peaceful atmosphere"
+
+Input: "파리 몽마르트 언덕의 카페"
+Output: "Montmartre hill cafe in Paris France, charming Parisian street scene, artistic bohemian atmosphere"
+"""
+
+        params = LLMGenerationParams(
+            prompt=f"Convert this to an optimized English image prompt:\n{input_text}",
+            system_prompt=system_prompt,
+            temperature=0.3,  # 낮은 온도로 일관된 출력
+            max_tokens=200,
+        )
+
+        result = await llm_provider.generate(params)
+
+        if result.success and result.content:
+            optimized = result.content.strip()
+            logger.info(f"Optimized destination prompt: {input_text[:50]}... -> {optimized[:100]}...")
+            return optimized
+        else:
+            logger.warning(f"LLM optimization failed, using original: {result.error}")
+            return destination
+
+    except Exception as e:
+        logger.error(f"Prompt optimization error: {e}")
+        return destination
+
+
+async def optimize_outfit_prompt(outfit_style: str) -> str:
+    """LLM을 사용하여 한국어 의상 스타일을 영어로 번역
+
+    Args:
+        outfit_style: 사용자가 입력한 의상 스타일 (한국어 가능)
+
+    Returns:
+        영어로 번역된 의상 스타일
+    """
+    if not outfit_style:
+        return ""
+
+    try:
+        system_prompt = """You are an expert at converting fashion/outfit descriptions into English for image generation.
+
+Your task:
+1. Translate any non-English text to English
+2. Convert fashion terms to clear, descriptive English
+3. Keep it concise and suitable for image generation prompts
+
+Output format: Just the English outfit description, no explanations.
+
+Examples:
+Input: "블랙 레더, 메탈릭 악세서리, 미니멀 다크톤"
+Output: "black leather jacket, metallic accessories, minimal dark-toned outfit"
+
+Input: "화이트 린넨 셔츠, 라탄 가방"
+Output: "white linen shirt, rattan bag, casual summer style"
+
+Input: "빈티지 데님, 레트로 선글라스"
+Output: "vintage denim, retro sunglasses, classic casual look"
+"""
+
+        params = LLMGenerationParams(
+            prompt=f"Convert this outfit description to English:\n{outfit_style}",
+            system_prompt=system_prompt,
+            temperature=0.3,
+            max_tokens=100,
+        )
+
+        result = await llm_provider.generate(params)
+
+        if result.success and result.content:
+            optimized = result.content.strip().strip('"')
+            logger.info(f"Optimized outfit prompt: {outfit_style[:30]}... -> {optimized[:50]}...")
+            return optimized
+        else:
+            logger.warning(f"Outfit optimization failed, using original: {result.error}")
+            return outfit_style
+
+    except Exception as e:
+        logger.error(f"Outfit optimization error: {e}")
+        return outfit_style
+
+
+async def build_travel_prompt(request: GenerateRequest) -> str:
+    """여행 프롬프트 구성 (LLM 기반 최적화 포함)"""
+
+    # 1. LLM으로 destination을 영어 프롬프트로 최적화
+    optimized_destination = await optimize_destination_prompt(
+        request.destination,
+        request.additionalPrompt
+    )
+
+    # 2. LLM으로 outfit을 영어로 번역
+    optimized_outfit = await optimize_outfit_prompt(request.outfitStyle)
+
+    # 3. 필름 스톡 스타일
     film_style = FILM_STOCK_PROMPTS.get(request.filmStock, f"shot on {request.filmStock} film")
 
-    # 의상 스타일
-    outfit_prompt = f"wearing {request.outfitStyle} style clothing" if request.outfitStyle else ""
+    # 4. 의상 스타일
+    outfit_prompt = f"wearing {optimized_outfit}" if optimized_outfit else ""
 
-    # 컬러 팔레트 힌트
+    # 5. 컬러 팔레트 힌트
     color_hint = ""
     if request.colorPalette:
         colors = ", ".join(request.colorPalette[:3])
         color_hint = f"color palette featuring {colors} tones"
 
-    # 여행 사진 느낌 공통 요소
-    travel_photo_style = "authentic travel photography, candid moment, natural pose, real location, immersive atmosphere, environmental portrait"
+    # 6. 여행 사진 느낌 공통 요소
+    travel_photo_style = "authentic travel photography, candid moment, natural lighting, environmental portrait"
 
-    # 최종 프롬프트 조합
+    # 최종 프롬프트 조합 (장소 정보를 앞에 배치)
     prompt_parts = [
-        base_prompt,
-        request.additionalPrompt,
+        f"A traveler at {optimized_destination}",  # 최적화된 영어 장소 설명
         outfit_prompt,
         travel_photo_style,
         film_style,
-        concept_style,
         color_hint,
         "high quality, detailed, professional photography"
     ]
@@ -253,8 +376,8 @@ async def generate_image(request: GenerateRequest):
     try:
         logger.info(f"Generate request: {request.destination}, concept={request.concept}")
 
-        # 여행 프롬프트 구성
-        travel_prompt = build_travel_prompt(request)
+        # 여행 프롬프트 구성 (LLM 기반 최적화 포함)
+        travel_prompt = await build_travel_prompt(request)
         logger.info(f"Built travel prompt: {travel_prompt[:200]}...")
 
         # 키워드 추출 (간단히 분리)
