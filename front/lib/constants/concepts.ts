@@ -1,7 +1,9 @@
+import type { Concept } from '@/lib/types';
+
 export type FilmType = 'FUJI' | 'Kodak' | 'Canon' | 'Ricoh' | 'Nikon' | 'Pentax';
 
 export interface ConceptData {
-  id: 'flaneur' | 'filmlog' | 'midnight' | 'pastoral' | 'noir' | 'seaside';
+  id: Concept;
   name: string;
   nameKo: string;
   tagline: string;

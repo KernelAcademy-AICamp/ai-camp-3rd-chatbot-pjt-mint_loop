@@ -82,7 +82,7 @@ export default function DestinationsPage() {
 
   useEffect(() => {
     loadDestinations();
-  }, []);
+  }, [loadDestinations]);
 
 
   // 캐러셀 스크롤

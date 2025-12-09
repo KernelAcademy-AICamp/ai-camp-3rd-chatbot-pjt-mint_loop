@@ -88,7 +88,7 @@ export function ImageGenerationModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={status === 'loading' ? () => {} : onClose}
+      onClose={status === 'loading' ? () => { } : onClose}
       size="full"
       showCloseButton={status !== 'loading'}
       closeOnOverlayClick={status !== 'loading'}
@@ -125,7 +125,7 @@ export function ImageGenerationModal({
               이미지 생성 중...
             </h3>
             <p className="text-gray-500 mb-4">
-              DALL-E 3가 <strong>{concept.nameKo}</strong> 감성의 여행 사진을 만들고 있어요
+              <strong>{concept.nameKo}</strong> 감성의 여행 사진을 만들고 있어요
             </p>
 
             {/* Progress Animation */}

@@ -80,7 +80,7 @@ export function ImageGenerationForm({
         {tripKitProfile && (tripKitProfile.city || tripKitProfile.spotName || tripKitProfile.mainAction) && (
           <div className="mt-4 pt-4 border-t border-cream-100">
             <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-              <span className="text-sepia-500">✦</span>
+              <span className="text-sepia-500" role="img" aria-label="star">✦</span>
               대화에서 수집한 정보
             </h4>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-cream-50 p-3 rounded-lg">
@@ -178,8 +178,8 @@ export function ImageGenerationForm({
               onClick={() => setSelectedFilm(film)}
               disabled={isLoading}
               className={`px-4 py-2 rounded-full text-sm transition-all ${selectedFilm === film
-                  ? 'bg-sepia-500 text-white shadow-md'
-                  : 'bg-cream-100 text-gray-700 hover:bg-cream-200'
+                ? 'bg-sepia-500 text-white shadow-md'
+                : 'bg-cream-100 text-gray-700 hover:bg-cream-200'
                 }`}
             >
               {film}
@@ -191,7 +191,7 @@ export function ImageGenerationForm({
       {/* 필름 스타일 미리보기 */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          🎞️ {concept.filmType} 필름 스타일
+          <span role="img" aria-label="film">🎞️</span> {concept.filmType} 필름 스타일
         </label>
         <p className="text-sm text-gray-600 bg-cream-50 p-3 rounded-lg border border-cream-200">
           {concept.filmStyleDescription}

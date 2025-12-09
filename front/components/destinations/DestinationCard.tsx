@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils/cn';
 import type { Destination } from '@/lib/types';
@@ -28,10 +29,13 @@ export function DestinationCard({ destination, isActive, onClick }: DestinationC
       {/* Image */}
       <div className="relative aspect-[4/3] bg-cream-100 overflow-hidden">
         {photo ? (
-          <img
+          <Image
             src={photo}
             alt={destination.name}
-            className="w-full h-full object-cover"
+            fill
+            sizes="(max-width: 768px) calc(100vw - 4rem), 672px"
+            className="object-cover"
+            unoptimized
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
