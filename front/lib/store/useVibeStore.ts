@@ -59,6 +59,8 @@ interface VibeState {
   setPreferences: (prefs: Partial<UserPreferences>) => void;
   setConcept: (concept: Concept) => void;
   setDestinations: (destinations: Destination[]) => void;
+  addDestination: (destination: Destination) => void;
+  clearDestinations: () => void;
   selectDestination: (destination: Destination) => void;
   setHiddenSpots: (spots: HiddenSpot[]) => void;
   toggleSpotSelection: (spot: HiddenSpot) => void;
@@ -110,6 +112,20 @@ export const useVibeStore = create<VibeState>()(
         })),
 
       setDestinations: (destinations) => set({ destinations }),
+
+      addDestination: (destination) =>
+        set((state) => {
+          // 이미 존재하는 destination인지 확인 (id로 체크)
+          const exists = state.destinations.some((d) => d.id === destination.id);
+          if (exists) {
+            return state; // 이미 있으면 추가하지 않음
+          }
+          return {
+            destinations: [...state.destinations, destination],
+          };
+        }),
+
+      clearDestinations: () => set({ destinations: [] }),
 
       selectDestination: (destination) =>
         set({

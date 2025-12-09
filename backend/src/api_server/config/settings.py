@@ -30,6 +30,10 @@ class Settings:
     CHAT_MODEL: str = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.0-flash")
     IMAGE_PROVIDER: str = os.getenv("IMAGE_PROVIDER", "gemini")
 
+    # Recommendation settings
+    RECOMMENDATION_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
+    RECOMMENDATION_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")
+
     # CORS settings
     CORS_ORIGINS: list[str] = [
         "http://localhost:3000",

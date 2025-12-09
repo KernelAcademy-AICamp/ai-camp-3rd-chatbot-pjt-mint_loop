@@ -108,6 +108,9 @@ services:
       - GEMINI_TEXT_MODEL=${GEMINI_TEXT_MODEL}
       - GEMINI_IMAGE_MODEL=${GEMINI_IMAGE_MODEL}
       - IMAGE_PROVIDER=${IMAGE_PROVIDER}
+      # Recommendation Agent 설정
+      - LLM_PROVIDER=${LLM_PROVIDER}
+      - LLM_MODEL=${LLM_MODEL}
       - DEBUG=${DEBUG:-false}
       - LOG_LEVEL=${LOG_LEVEL}
       # Vertex AI 설정 (credentials 파일은 volumes로 마운트)
