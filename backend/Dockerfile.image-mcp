@@ -1,4 +1,4 @@
-# # Dockerfile for Image Generation MCP Server
+# Dockerfile for Image Generation MCP Server
 # FROM python:3.12-slim
 
 # WORKDIR /app

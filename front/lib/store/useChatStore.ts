@@ -220,14 +220,14 @@ export const useChatStore = create<ChatState>()(
       setRejectedItems: (items) =>
         set((state) => ({
           rejectedItems: {
-            cities: [...new Set([...state.rejectedItems.cities, ...(items.cities || [])])],
-            spots: [...new Set([...state.rejectedItems.spots, ...(items.spots || [])])],
-            actions: [...new Set([...state.rejectedItems.actions, ...(items.actions || [])])],
-            concepts: [...new Set([...state.rejectedItems.concepts, ...(items.concepts || [])])],
-            outfits: [...new Set([...state.rejectedItems.outfits, ...(items.outfits || [])])],
-            poses: [...new Set([...state.rejectedItems.poses, ...(items.poses || [])])],
-            films: [...new Set([...state.rejectedItems.films, ...(items.films || [])])],
-            cameras: [...new Set([...state.rejectedItems.cameras, ...(items.cameras || [])])],
+            cities: Array.from(new Set([...state.rejectedItems.cities, ...(items.cities || [])])),
+            spots: Array.from(new Set([...state.rejectedItems.spots, ...(items.spots || [])])),
+            actions: Array.from(new Set([...state.rejectedItems.actions, ...(items.actions || [])])),
+            concepts: Array.from(new Set([...state.rejectedItems.concepts, ...(items.concepts || [])])),
+            outfits: Array.from(new Set([...state.rejectedItems.outfits, ...(items.outfits || [])])),
+            poses: Array.from(new Set([...state.rejectedItems.poses, ...(items.poses || [])])),
+            films: Array.from(new Set([...state.rejectedItems.films, ...(items.films || [])])),
+            cameras: Array.from(new Set([...state.rejectedItems.cameras, ...(items.cameras || [])])),
           },
         })),
 
