@@ -4,12 +4,16 @@
 Strategy Pattern을 통해 OpenAI/Gemini 등 다양한 LLM Provider를 지원합니다.
 Google Places API를 통해 추가적인 장소 정보를 enrichment합니다.
 """
+import asyncio
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+
 import structlog
 from langchain_core.messages import AIMessage
 
-from .state import RecommendationState, Destination, PlaceDetails, ImageGenerationContext
+from .state import RecommendationState, Destination, PlaceDetails
 from ...providers import get_llm_provider, LLMGenerationParams
 
 # Google Maps 클라이언트 (Places API용)
@@ -31,9 +35,9 @@ except ImportError:
 
 logger = structlog.get_logger(__name__)
 
-# 기본 설정
+# 기본 설정 (gpt-4o-mini: 5-10초, gpt-4o: 30-40초)
 DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
-DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 
 
 # 컨셉별 분위기 키워드
@@ -177,43 +181,11 @@ async def build_prompt_node(state: RecommendationState) -> RecommendationState:
 - 꿈꾸는 여행 장면: {user_profile.get('travel_scene') or '특별한 순간을 기록하는 여행'}
 {destination_line}
 {image_context_intro}
-위 프로필을 바탕으로, 이 사용자에게 완벽하게 맞는 숨겨진 여행지 3곳을 추천해주세요.
+위 프로필을 바탕으로, 숨겨진 여행지 3곳을 추천해주세요. 간결하게 JSON으로 응답:
 
-다음 JSON 형식으로 응답해주세요:
-{{
-  "destinations": [
-    {{
-      "id": "dest_1",
-      "name": "장소 이름 (특별한 수식어 포함)",
-      "city": "도시명",
-      "country": "국가명",
-      "description": "이 장소의 특별한 매력을 감성적으로 설명 (3-4문장)",
-      "matchReason": "사용자의 취향에 맞는 구체적인 이유 (2-3문장)",
-      "localVibe": "현지 분위기를 한 문장으로",
-      "whyHidden": "왜 숨겨진 명소인지 설명",
-      "bestTimeToVisit": "추천 방문 시기와 이유",
-      "photographyScore": 8-10,
-      "transportAccessibility": "easy|moderate|challenging",
-      "safetyRating": 7-10,
-      "estimatedBudget": "$|$$|$$$",
-      "tags": ["관련 태그 3-5개"],
-      "photographyTips": ["사진 촬영 팁 2-3개"],
-      "storyPrompt": "이 장소에서 만들 수 있는 나만의 스토리 제안",
-      "activities": [
-        {{
-          "name": "액티비티명",
-          "description": "경험 설명",
-          "duration": "소요 시간",
-          "bestTime": "추천 시간대",
-          "localTip": "현지인 팁",
-          "photoOpportunity": "포토 스팟 설명"
-        }}
-      ]
-    }}
-  ]
-}}
-
-각 장소마다 2-3개의 특별한 액티비티를 포함해주세요."""
+{{"destinations": [
+  {{"id": "dest_1", "name": "장소명", "city": "도시", "country": "국가", "description": "2문장 설명", "matchReason": "1문장", "tags": ["태그3개"], "photographyScore": 9, "estimatedBudget": "$$"}}
+]}}"""
 
         logger.info("Prompts built successfully")
 
@@ -397,10 +369,156 @@ async def parse_response_node(state: RecommendationState) -> RecommendationState
         }
 
 
-async def enrich_with_places_node(state: RecommendationState) -> RecommendationState:
-    """Google Places API로 여행지 정보 보강 노드
+def _enrich_single_destination_sync(dest: dict, maps_credential: str) -> dict:
+    """단일 여행지에 대한 Google Places API 정보 보강 (동기 함수)
 
-    추천된 각 여행지에 대해 Google Places API를 호출하여
+    googlemaps 라이브러리가 동기 방식이므로, ThreadPoolExecutor에서 실행됩니다.
+    """
+    if not gmaps_client:
+        return dest
+
+    try:
+        # 검색어 구성: 장소명 + 도시 + 국가
+        search_query = f"{dest.get('name', '')} {dest.get('city', '')} {dest.get('country', '')}"
+        logger.info(f"Searching places for: {search_query}")
+
+        # 장소 검색
+        search_result = gmaps_client.places(
+            query=search_query,
+            language="ko"
+        )
+
+        places = search_result.get("results", [])
+        if not places:
+            logger.info(f"No places found for {search_query}")
+            return dest
+
+        # 첫 번째 결과의 place_id로 상세 정보 조회
+        place = places[0]
+        place_id = place.get("place_id")
+
+        if not place_id:
+            return dest
+
+        # 상세 정보 조회
+        detail_result = gmaps_client.place(
+            place_id=place_id,
+            language="ko",
+            fields=[
+                "name",
+                "formatted_address",
+                "formatted_phone_number",
+                "website",
+                "url",
+                "rating",
+                "user_ratings_total",
+                "reviews",
+                "opening_hours",
+                "price_level",
+                "type",
+                "geometry",
+                "photo",
+            ]
+        )
+
+        place_detail = detail_result.get("result", {})
+
+        # 사진 정보 처리
+        photos = []
+        for photo in place_detail.get("photos", [])[:5]:
+            photo_ref = photo.get("photo_reference")
+            if photo_ref:
+                photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference={photo_ref}&key={maps_credential}"
+                photos.append({
+                    "reference": photo_ref,
+                    "url": photo_url,
+                    "width": photo.get("width"),
+                    "height": photo.get("height"),
+                })
+
+        # 리뷰 정보 처리
+        reviews = []
+        for review in place_detail.get("reviews", [])[:5]:
+            reviews.append({
+                "author": review.get("author_name"),
+                "rating": review.get("rating"),
+                "text": review.get("text"),
+                "time": review.get("relative_time_description"),
+            })
+
+        # PlaceDetails 구성
+        place_details: PlaceDetails = {
+            "place_id": place_id,
+            "google_name": place_detail.get("name"),
+            "google_address": place_detail.get("formatted_address"),
+            "phone": place_detail.get("formatted_phone_number"),
+            "website": place_detail.get("website"),
+            "google_maps_url": place_detail.get("url"),
+            "rating": place_detail.get("rating"),
+            "user_ratings_total": place_detail.get("user_ratings_total"),
+            "price_level": place_detail.get("price_level"),
+            "opening_hours": place_detail.get("opening_hours", {}).get("weekday_text", []),
+            "is_open_now": place_detail.get("opening_hours", {}).get("open_now"),
+            "photos": photos,
+            "reviews": reviews,
+            "location": place_detail.get("geometry", {}).get("location"),
+        }
+
+        enriched_dest = {**dest, "placeDetails": place_details}
+        logger.info(f"Enriched {dest.get('name')} with rating={place_details.get('rating')}")
+        return enriched_dest
+
+    except Exception as e:
+        logger.error(f"Failed to enrich destination {dest.get('name')}: {e}")
+        return dest
+
+
+async def enrich_destinations_parallel(destinations: list[dict]) -> list[dict]:
+    """여러 여행지에 대해 Google Places API 정보를 병렬로 보강
+
+    동기 googlemaps 라이브러리를 ThreadPoolExecutor로 감싸서
+    asyncio.gather로 병렬 실행합니다.
+
+    Args:
+        destinations: 보강할 여행지 목록
+
+    Returns:
+        placeDetails가 추가된 여행지 목록
+    """
+    if not gmaps_client or not destinations:
+        return destinations
+
+    maps_credential = _GOOGLE_MAPS_CREDENTIAL or ""
+
+    loop = asyncio.get_event_loop()
+
+    # ThreadPoolExecutor를 사용하여 동기 함수를 병렬로 실행
+    with ThreadPoolExecutor(max_workers=min(len(destinations), 5)) as executor:
+        tasks = [
+            loop.run_in_executor(
+                executor,
+                partial(_enrich_single_destination_sync, dest, maps_credential)
+            )
+            for dest in destinations
+        ]
+        enriched = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # 예외 처리: 실패한 경우 원본 반환
+    result = []
+    for i, enriched_dest in enumerate(enriched):
+        if isinstance(enriched_dest, Exception):
+            logger.error(f"Enrichment failed for destination {i}: {enriched_dest}")
+            result.append(destinations[i])
+        else:
+            result.append(enriched_dest)
+
+    return result
+
+
+async def enrich_with_places_node(state: RecommendationState) -> RecommendationState:
+    """Google Places API로 여행지 정보 보강 노드 (병렬 처리)
+
+    추천된 각 여행지에 대해 Google Places API를 병렬로 호출하여
     실제 장소 정보(평점, 리뷰, 사진, 영업시간 등)를 추가합니다.
     """
     try:
@@ -419,109 +537,10 @@ async def enrich_with_places_node(state: RecommendationState) -> RecommendationS
                 "status": "completed"
             }
 
-        logger.info(f"Enriching {len(destinations)} destinations with Places API data")
+        logger.info(f"Enriching {len(destinations)} destinations with Places API data (parallel)")
 
-        enriched_destinations = []
-        for dest in destinations:
-            try:
-                # 검색어 구성: 장소명 + 도시 + 국가
-                search_query = f"{dest.get('name', '')} {dest.get('city', '')} {dest.get('country', '')}"
-                logger.info(f"Searching places for: {search_query}")
-
-                # 장소 검색
-                search_result = gmaps_client.places(
-                    query=search_query,
-                    language="ko"
-                )
-
-                places = search_result.get("results", [])
-                if not places:
-                    logger.info(f"No places found for {search_query}")
-                    enriched_destinations.append(dest)
-                    continue
-
-                # 첫 번째 결과의 place_id로 상세 정보 조회
-                place = places[0]
-                place_id = place.get("place_id")
-
-                if not place_id:
-                    enriched_destinations.append(dest)
-                    continue
-
-                # 상세 정보 조회
-                detail_result = gmaps_client.place(
-                    place_id=place_id,
-                    language="ko",
-                    fields=[
-                        "name",
-                        "formatted_address",
-                        "formatted_phone_number",
-                        "website",
-                        "url",
-                        "rating",
-                        "user_ratings_total",
-                        "reviews",
-                        "opening_hours",
-                        "price_level",
-                        "type",
-                        "geometry",
-                        "photo",
-                    ]
-                )
-
-                place_detail = detail_result.get("result", {})
-
-                # 사진 정보 처리
-                photos = []
-                for photo in place_detail.get("photos", [])[:5]:
-                    photo_ref = photo.get("photo_reference")
-                    if photo_ref:
-                        # 사진 URL 생성
-                        photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photoreference={photo_ref}&key={_GOOGLE_MAPS_CREDENTIAL}"
-                        photos.append({
-                            "reference": photo_ref,
-                            "url": photo_url,
-                            "width": photo.get("width"),
-                            "height": photo.get("height"),
-                        })
-
-                # 리뷰 정보 처리
-                reviews = []
-                for review in place_detail.get("reviews", [])[:5]:
-                    reviews.append({
-                        "author": review.get("author_name"),
-                        "rating": review.get("rating"),
-                        "text": review.get("text"),
-                        "time": review.get("relative_time_description"),
-                    })
-
-                # PlaceDetails 구성
-                place_details: PlaceDetails = {
-                    "place_id": place_id,
-                    "google_name": place_detail.get("name"),
-                    "google_address": place_detail.get("formatted_address"),
-                    "phone": place_detail.get("formatted_phone_number"),
-                    "website": place_detail.get("website"),
-                    "google_maps_url": place_detail.get("url"),
-                    "rating": place_detail.get("rating"),
-                    "user_ratings_total": place_detail.get("user_ratings_total"),
-                    "price_level": place_detail.get("price_level"),
-                    "opening_hours": place_detail.get("opening_hours", {}).get("weekday_text", []),
-                    "is_open_now": place_detail.get("opening_hours", {}).get("open_now"),
-                    "photos": photos,
-                    "reviews": reviews,
-                    "location": place_detail.get("geometry", {}).get("location"),
-                }
-
-                # 기존 destination에 placeDetails 추가
-                enriched_dest = {**dest, "placeDetails": place_details}
-                enriched_destinations.append(enriched_dest)
-
-                logger.info(f"Enriched {dest.get('name')} with rating={place_details.get('rating')}")
-
-            except Exception as e:
-                logger.error(f"Failed to enrich destination {dest.get('name')}: {e}")
-                enriched_destinations.append(dest)
+        # 병렬로 모든 여행지 정보 보강
+        enriched_destinations = await enrich_destinations_parallel(destinations)
 
         # 메시지 추가
         new_messages = state["messages"] + [

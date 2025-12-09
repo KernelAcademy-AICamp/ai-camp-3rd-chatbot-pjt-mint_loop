@@ -35,12 +35,21 @@ class UserPreferences(BaseModel):
     interests: list[str] = []
 
 
+class ImageGenerationContext(BaseModel):
+    """Context from previous image generation."""
+    destination: Optional[str] = None
+    additionalPrompt: Optional[str] = None
+    filmStock: Optional[str] = None
+    outfitStyle: Optional[str] = None
+
+
 class RecommendationRequest(BaseModel):
     """Destination recommendation request."""
     preferences: UserPreferences
     concept: Optional[str] = None
     travelScene: Optional[str] = None
     travelDestination: Optional[str] = None
+    imageGenerationContext: Optional[ImageGenerationContext] = None
 
 
 class ChatMessage(BaseModel):

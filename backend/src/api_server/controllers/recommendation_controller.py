@@ -60,12 +60,18 @@ async def get_recommendations(request: RecommendationRequest):
 
 @router.post("/recommendations/destinations/stream")
 async def stream_recommendations(request: RecommendationRequest):
-    """Stream destination recommendations one by one via SSE."""
+    """Stream destination recommendations via SSE with 2-phase delivery.
+
+    Phase 1: LLM 응답 후 즉시 초기 3개 여행지 전송 (빠른 응답)
+    Phase 2: Google Places API enrichment 후 enriched 버전 3개 추가 전송
+
+    클라이언트는 총 6개의 destination을 받게 됩니다.
+    """
 
     async def generate():
         try:
             logger.info(
-                "Streaming recommendations request",
+                "Streaming recommendations request (2-phase)",
                 mood=request.preferences.mood,
                 concept=request.concept
             )
@@ -80,35 +86,19 @@ async def stream_recommendations(request: RecommendationRequest):
                 "concept": request.concept,
                 "travel_scene": request.travelScene,
                 "travel_destination": request.travelDestination,
+                "image_generation_context": {
+                    "destination": request.imageGenerationContext.destination if request.imageGenerationContext else None,
+                    "additionalPrompt": request.imageGenerationContext.additionalPrompt if request.imageGenerationContext else None,
+                    "filmStock": request.imageGenerationContext.filmStock if request.imageGenerationContext else None,
+                    "outfitStyle": request.imageGenerationContext.outfitStyle if request.imageGenerationContext else None,
+                } if request.imageGenerationContext else None,
             }
 
-            result = await _recommendation_agent.recommend(input_data)
-            destinations = result.get("destinations", [])
-
-            logger.info("Streaming recommendations", count=len(destinations))
-
-            # Stream each destination as SSE event - 각 yield 후 즉시 flush
-            for i, destination in enumerate(destinations):
-                event_data = {
-                    "type": "destination",
-                    "index": i,
-                    "total": len(destinations),
-                    "destination": destination,
-                    "isFallback": result.get("is_fallback", False),
-                }
-                yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+            # 2단계 스트리밍 사용
+            async for event in _recommendation_agent.recommend_stream(input_data):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
                 # 즉시 flush를 위해 event loop에 제어권 양보
                 await asyncio.sleep(0)
-
-            # Send completion event
-            complete_data = {
-                "type": "complete",
-                "total": len(destinations),
-                "userProfile": result.get("user_profile"),
-                "isFallback": result.get("is_fallback", False),
-            }
-            yield f"data: {json.dumps(complete_data, ensure_ascii=False)}\n\n"
-            await asyncio.sleep(0)
 
         except Exception as e:
             logger.error("Streaming recommendations error", error=str(e))

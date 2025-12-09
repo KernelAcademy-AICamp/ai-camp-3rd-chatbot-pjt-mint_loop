@@ -4,6 +4,8 @@ Strategy Pattern을 통해 OpenAI/Gemini 등 다양한 LLM Provider를 지원합
 기본 Provider: OpenAI (gpt-4o)
 """
 import os
+from typing import AsyncIterator
+
 import structlog
 from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, END
@@ -16,14 +18,15 @@ from .nodes import (
     generate_recommendations_node,
     parse_response_node,
     enrich_with_places_node,
+    enrich_destinations_parallel,
     get_fallback_destinations,
 )
 
 logger = structlog.get_logger(__name__)
 
-# 기본 설정
+# 기본 설정 (gpt-4o-mini: 5-10초, gpt-4o: 30-40초)
 DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
-DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 
 
 class RecommendationAgent:
@@ -184,4 +187,135 @@ class RecommendationAgent:
                 "user_profile": {},
                 "status": "completed",
                 "is_fallback": True
+            }
+
+    async def recommend_stream(
+        self,
+        input_data: RecommendationInput,
+        thread_id: str = "default",
+        provider_type: str | None = None,
+        model: str | None = None
+    ) -> AsyncIterator[dict]:
+        """여행지 추천 2단계 스트리밍 실행
+
+        1단계: LLM 응답 파싱 후 즉시 초기 3개 여행지 전송
+        2단계: Google Places API enrichment 후 enriched 버전 3개 추가 전송
+
+        클라이언트는 총 6개의 destination 이벤트를 받게 됩니다.
+        (초기 3개 + enriched 3개)
+
+        Args:
+            input_data: 사용자 입력 데이터
+            thread_id: 대화 스레드 ID
+            provider_type: LLM Provider 타입
+            model: 사용할 모델
+
+        Yields:
+            dict: SSE 이벤트 데이터
+                - type: "destination" | "enriched" | "complete" | "error"
+                - destination: 여행지 정보
+                - phase: "initial" | "enriched"
+        """
+        try:
+            actual_provider = provider_type or self.provider_type
+            actual_model = model or self.model
+
+            logger.info(
+                "Starting streaming recommendation generation",
+                concept=input_data.get("concept"),
+                destination=input_data.get("travel_destination"),
+                provider=actual_provider,
+                model=actual_model
+            )
+
+            # 초기 상태 구성
+            initial_state: RecommendationState = {
+                "messages": [HumanMessage(content="여행지 추천을 요청합니다.")],
+                "user_preferences": input_data.get("preferences", {}),
+                "concept": input_data.get("concept"),
+                "travel_scene": input_data.get("travel_scene"),
+                "travel_destination": input_data.get("travel_destination"),
+                "image_generation_context": input_data.get("image_generation_context"),
+                "llm_provider": actual_provider,
+                "model": actual_model,
+                "user_profile": {},
+                "system_prompt": "",
+                "user_prompt": "",
+                "raw_response": "",
+                "destinations": [],
+                "status": "pending",
+                "error": None
+            }
+
+            # === 1단계: LLM 응답까지 실행 (enrich 제외) ===
+            # 노드별 순차 실행
+            state = initial_state
+
+            # analyze_preferences
+            state = await analyze_preferences_node(state)
+
+            # build_prompt
+            state = await build_prompt_node(state)
+
+            # generate_recommendations (LLM 호출)
+            state = await generate_recommendations_node(
+                state,
+                provider_type=actual_provider,
+                model=actual_model
+            )
+
+            # parse_response
+            state = await parse_response_node(state)
+
+            parsed_destinations = state.get("destinations", [])
+            user_profile = state.get("user_profile", {})
+
+            logger.info(f"LLM parsing complete: {len(parsed_destinations)} destinations")
+
+            # === Google Places API enrichment (병렬 처리) ===
+            logger.info("Starting Places API enrichment (parallel)")
+
+            enriched_destinations = await enrich_destinations_parallel(parsed_destinations)
+
+            logger.info(f"Enrichment complete: {len(enriched_destinations)} destinations")
+
+            # === enriched 데이터 3개 스트리밍 ===
+            for i, dest in enumerate(enriched_destinations):
+                yield {
+                    "type": "destination",
+                    "index": i,
+                    "total": len(enriched_destinations),
+                    "destination": dest,
+                    "isFallback": False,
+                }
+
+            # === 완료 이벤트 ===
+            yield {
+                "type": "complete",
+                "total": len(enriched_destinations),
+                "userProfile": user_profile,
+                "isFallback": False,
+            }
+
+        except Exception as e:
+            logger.error(f"Streaming recommendation failed: {e}")
+
+            # 폴백 데이터 스트리밍
+            fallback = get_fallback_destinations()
+            for i, dest in enumerate(fallback):
+                yield {
+                    "type": "destination",
+                    "phase": "fallback",
+                    "index": i,
+                    "total": len(fallback),
+                    "destination": dest,
+                    "isFallback": True,
+                }
+
+            yield {
+                "type": "complete",
+                "total": len(fallback),
+                "userProfile": {},
+                "isFallback": True,
+                "error": str(e),
             }

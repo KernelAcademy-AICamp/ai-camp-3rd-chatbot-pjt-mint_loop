@@ -88,8 +88,6 @@ async def optimize_prompt_node(
     """프롬프트 최적화 노드
 
     키워드와 스타일 정보를 결합하여 이미지 생성에 최적화된 프롬프트를 생성합니다.
-
-    리팩토링: Image MCP 대신 직접 로직 구현
     """
     try:
         logger.info("Optimizing prompt for image generation")

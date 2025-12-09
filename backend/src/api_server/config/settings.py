@@ -30,8 +30,8 @@ class Settings:
     CHAT_MODEL: str = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.0-flash")
     IMAGE_PROVIDER: str = os.getenv("IMAGE_PROVIDER", "gemini")
 
-    # Recommendation settings
-    RECOMMENDATION_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o")
+    # Recommendation settings (gpt-4o-mini: 5-10초, gpt-4o: 30-40초)
+    RECOMMENDATION_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
     RECOMMENDATION_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")
 
     # CORS settings
