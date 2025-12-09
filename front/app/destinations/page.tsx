@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useVibeStore } from '@/lib/store/useVibeStore';
 import { DestinationCard } from '@/components/destinations/DestinationCard';
 import { DestinationModal } from '@/components/destinations/DestinationModal';
@@ -32,6 +33,7 @@ function SkeletonCard() {
 }
 
 export default function DestinationsPage() {
+  const router = useRouter();
   const { selectedConcept, preferences, setDestinations, destinations, imageGenerationContext } = useVibeStore();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +42,10 @@ export default function DestinationsPage() {
   const carouselRef = useRef<HTMLDivElement>(null);
 
   const concept = selectedConcept ? getConceptById(selectedConcept) : null;
+
+  const handleCompleteTripKit = () => {
+    router.push('/tripkit');
+  };
 
   // API 호출
   const loadDestinations = useCallback(async () => {
@@ -336,6 +342,27 @@ export default function DestinationsPage() {
               총 <span className="font-semibold text-sepia-600">{destinations.length}</span>개의 숨겨진 명소
             </p>
           </div>
+        )}
+
+        {/* TripKit Complete Button */}
+        {!isLoading && destinations.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="text-center mt-10 pb-8"
+          >
+            <Button
+              onClick={handleCompleteTripKit}
+              size="lg"
+              className="px-10"
+            >
+              TripKit 완성하기 →
+            </Button>
+            <p className="text-sm text-gray-500 mt-3">
+              여행 준비가 완료되었어요!
+            </p>
+          </motion.div>
         )}
       </main>
 

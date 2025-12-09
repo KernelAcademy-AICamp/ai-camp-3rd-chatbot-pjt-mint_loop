@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 const slides = [
   { src: '/img/1.avif', alt: 'Travel vibe 1' },
   { src: '/img/2.png', alt: 'Travel vibe 2' },
-  { src: '/img/3.webp', alt: 'Travel vibe 3' },
+  { src: '/img/1043251_1065941_175.jpg', alt: 'Autumn landscape' },
   { src: '/img/4.jpg', alt: 'Travel vibe 4' },
 ];
 
@@ -57,7 +57,7 @@ export function Hero() {
           </motion.div>
         </AnimatePresence>
         {/* Overlay for text readability */}
-        <div className="absolute inset-0 bg-black/30 z-10" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/40 to-black/60 z-10" />
       </div>
 
       {/* Content */}
@@ -72,24 +72,17 @@ export function Hero() {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="inline-block px-4 py-2 mb-8 text-sm font-bold tracking-wider text-sepia-700 bg-sepia-100/70 rounded-full border border-sepia-200"
+            className="inline-block px-4 py-2 mb-8 text-sm font-bold tracking-wider text-white bg-white/20 backdrop-blur-sm rounded-full border border-white/40"
           >
             AI-Powered Vibe Travel
           </motion.span>
 
           {/* Main Headline */}
           <div className="relative inline-block mb-8">
-            <div
-              className="absolute -inset-8 opacity-60"
-              style={{
-                background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.2) 40%, transparent 70%)',
-                filter: 'blur(20px)',
-              }}
-            />
-            <h1 className="relative font-serif text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-gray-900 leading-tight">
+            <h1 className="relative font-serif text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-white leading-tight drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">
               당신은 티켓만 끊으세요.
               <br />
-              <span className="text-white font-normal">여행의 &apos;분위기&apos;</span>는
+              <span className="text-cream-100 font-normal">여행의 &apos;분위기&apos;</span>는
               <br />
               우리가 챙겨드립니다.
             </h1>

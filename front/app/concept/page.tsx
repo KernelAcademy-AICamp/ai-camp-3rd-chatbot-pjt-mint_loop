@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { CONCEPTS } from '@/lib/constants/concepts';
+import { CONCEPTS, getConceptById } from '@/lib/constants/concepts';
 import { useVibeStore } from '@/lib/store/useVibeStore';
 import { ConceptCard } from '@/components/concept/ConceptCard';
 import { Button } from '@/components/ui/Button';

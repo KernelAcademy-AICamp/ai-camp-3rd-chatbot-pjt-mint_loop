@@ -151,7 +151,7 @@ export const CONCEPTS: ConceptData[] = [
   },
 ];
 
-export function getConceptById(id: string): ConceptData | undefined {
+export function getConceptById(id: Concept): ConceptData | undefined {
   return CONCEPTS.find((concept) => concept.id === id);
 }
 

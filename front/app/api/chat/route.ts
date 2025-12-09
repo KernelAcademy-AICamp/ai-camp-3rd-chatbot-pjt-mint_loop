@@ -69,8 +69,6 @@ export async function POST(request: NextRequest) {
       isComplete: data.isComplete,
       collectedData: data.collectedData,
       rejectedItems: data.rejectedItems,
-      suggestedOptions: data.suggestedOptions || [],
-      sessionId: data.sessionId,
     });
   } catch (error) {
     console.error('Chat API error:', error);
