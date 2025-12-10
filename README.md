@@ -8,11 +8,14 @@ TripKit은 사용자의 여행 '분위기(Vibe)'를 AI가 분석하여 숨겨진
 
 ---
 
+
 ## **팀원 소개**
 
-| ![이경섭](https://avatars.githubusercontent.com/u/156163982?v=4) | ![정지윤](https://avatars.githubusercontent.com/u/156163982?v=4) |
+
+
+| <img src="https://ca.slack-edge.com/T09TS0CK8CD-U09TYJUDT27-8a4fab22debf-512" width="200px"/> | <img src="https://ca.slack-edge.com/T09TS0CK8CD-U09U9LYHWP9-3fe37d262d0a-512" width="200px"/> |
 | :--------------------------------------------------------------: | :--------------------------------------------------------------: |
-|             [이경섭](https://github.com/gyungsubLee)             |                [정지윤](https://github.com/EHW99)                |
+|             [이경섭](https://github.com/gyungsubLee)             |                [정지윤](https://github.com/jjyun78912)                |
 
 ---
 
@@ -248,7 +251,7 @@ TripKit은 **ChatAgent**, **RecommendationAgent**, **ImageAgent** 3개의 LangGr
 
 ### **6.1 ChatAgent - 대화형 컨텍스트 수집**
 
-![TripKit Architecture](./docs/img/01-chat.png)
+<img src="./docs/img/01-chat.png" width="800px"/>
 
 - **모델:** OpenAI GPT-4o-mini
 - **구조:** LangGraph StateGraph + MemorySaver (세션 기반 상태 저장)
@@ -258,7 +261,7 @@ TripKit은 **ChatAgent**, **RecommendationAgent**, **ImageAgent** 3개의 LangGr
 
 ### **6.2 ImageAgent - 필름 감성 이미지 생성**
 
-![TripKit Architecture](./docs/img/02-img.png)
+<img src="./docs/img/02-img.png" width="800px"/>
 
 - **모델:** Google Gemini Imagen 3.0 (imagen-3.0-generate-002)
 - **구조:** LangGraph StateGraph + MCP 서버 통합
